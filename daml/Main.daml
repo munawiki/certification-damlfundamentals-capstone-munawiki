@@ -1,4 +1,44 @@
 module Main where
 
 import Daml.Script
+import CarbonCredit
+
+setup : Script ()
+setup = script do
+  -- Parties
+  issuer <- allocateParty "Issuer"
+  owner <- allocateParty "Owner"
+  newOwner <- allocateParty "NewOwner"
+  verifier <- allocateParty "Verifier"
+
+  -- Create a CarbonCredit contract with both issuer and owner as submitters
+  carbonCreditCid <- submitMulti [issuer, owner] [] do
+    createCmd CarbonCredit with issuer = issuer; owner = owner; amount = 100
+
+  -- Test 1: TransferCarbonCredit
+  transferProposalCid <- submit owner do
+    exerciseCmd carbonCreditCid TransferCarbonCredit with newOwner = newOwner
+
+  -- Accept the transfer
+  newCarbonCreditCid <- submit newOwner do
+    exerciseCmd transferProposalCid AcceptTransfer
+
+  -- Test 2: IncreaseCarbonCredit
+  _ <- submit issuer do
+    exerciseCmd newCarbonCreditCid IncreaseCarbonCredit with increaseAmount = 50
+
+  -- For demonstration purposes, let's create another CarbonCredit contract for the ConditionalTransfer test
+  anotherCarbonCreditCid <- submitMulti [issuer, owner] [] do
+    createCmd CarbonCredit with issuer = issuer; owner = owner; amount = 100
+
+  -- Test 3: ConditionalTransfer
+  -- This operation is now performed on anotherCarbonCreditCid, a separate contract from the one transferred to newOwner.
+  conditionalTransferProposalCid <- submit owner do
+    exerciseCmd anotherCarbonCreditCid ConditionalTransfer with newOwner = verifier; minimumTransferAmount = 50
+
+  -- Accept the conditional transfer
+  _ <- submit verifier do
+    exerciseCmd conditionalTransferProposalCid AcceptTransfer
+
+  return ()
 
