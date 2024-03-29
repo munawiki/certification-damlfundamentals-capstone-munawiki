@@ -55,7 +55,7 @@ template CarbonCreditTransaction
     signatory seller, buyer
     observer [] : [Party]
 
-    choice ExchangeCarbonCredit : (ContractId CarbonCredit, ContractId CarbonCredit)
+    choice ExchangeCarbonCredit : (ContractId CarbonCreditTransaction, ContractId CarbonCreditTransaction)
       with
         otherCarbonCreditId: CarbonCreditId
         otherParty: Party
