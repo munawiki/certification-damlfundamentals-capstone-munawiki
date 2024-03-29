@@ -1,51 +1,54 @@
 module CarbonCredit where
 
+import Daml.Script
 
-class Describable a where
-  describe : a -> Text
-
-data CarbonCreditDetails = CarbonCreditDetails
-  with
-    creditAmount: Int
-    date: Date
-  deriving (Show, Eq, Ord)
-
-instance Describable CarbonCreditDetails where
-  describe (CarbonCreditDetails amount date) =
-    "Carbon Credit Amount: " <> show amount <> ", Date: " <> show date
-
-template CarbonCreditIssuance
+-- Custom data type with deriving clauses for built-in typeclasses
+data CarbonCreditInfo = CarbonCreditInfo
   with
     issuer: Party
-    regulator: Party
-    details: CarbonCreditDetails
-  where
-    signatory issuer
-    observer regulator
-    
-    key (issuer, details.date): (Party, Date)
-    maintainer key._1
-    
-    -- Example choice to report issuance to the regulator
-    nonconsuming choice ReportIssuance: ()
-      controller issuer
-      do
-        return ()
+    owner: Party
+    amount: Decimal
+    certification: Text
+  deriving (Eq, Show)
 
-template CarbonCreditTransfer
+-- Custom typeclass for additional functionality
+class CustomShow a where
+  customShow : a -> Text
+
+instance CustomShow CarbonCreditInfo where
+  customShow info = info.certification <> ": " <> show (info.amount)
+
+-- First template
+template CarbonCredit
   with
-    currentHolder: Party
-    newHolder: Party
-    details: CarbonCreditDetails
+    info: CarbonCreditInfo
   where
-    signatory currentHolder
-    observer newHolder
+    signatory info.issuer, info.owner
+    observer info.owner -- Typically, the owner might also be an observer for notification purposes.
     
-    key (currentHolder, details.date): (Party, Date)
-    maintainer key._1
+    -- Contract key
+    key info.issuer: Party
+    maintainer key
+
+    -- Choices
+    nonconsuming choice TransferOwnership: ContractId CarbonCredit
+      with newOwner: Party
+      controller info.owner
+      do create this with info = info with owner = newOwner
+
+-- Second template for managing carbon credit proposals
+template CarbonCreditProposal
+  with
+    credit: CarbonCreditInfo
+    proposedTo: Party
+  where
+    signatory credit.issuer
+    observer proposedTo
     
-    -- Choice to accept the transfer
-    choice AcceptTransfer: ()
-      controller newHolder
-      do
-        return ()
+    -- Contract key
+    key credit.issuer: Party
+    maintainer key
+
+    choice AcceptProposal: ContractId CarbonCredit
+      controller proposedTo
+      do create CarbonCredit with info = credit
