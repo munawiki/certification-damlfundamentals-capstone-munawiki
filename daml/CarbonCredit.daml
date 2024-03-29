@@ -1,0 +1,68 @@
+module CarbonCredit where
+
+-- Custom data type for CarbonCreditId to ensure type safety across the application
+newtype CarbonCreditId = CarbonCreditId Text
+  deriving (Eq, Show)
+
+template CarbonCredit
+  with
+    issuer: Party
+    owner: Party
+    amount: Decimal -- Amount in tons of CO2 equivalent
+    carbonCreditId: CarbonCreditId -- Unique identifier for the carbon credit
+  where
+    signatory issuer, owner
+    observer [] : [Party]
+
+    key (issuer, carbonCreditId): (Party, CarbonCreditId)
+    maintainer key._1
+
+    nonconsuming choice IssueCarbonCredit : ContractId CarbonCredit
+      with
+        newAmount: Decimal
+      controller issuer
+      do
+        create this with amount = amount + newAmount
+
+    choice BuyCarbonCredit : ContractId CarbonCreditTransaction
+      with
+        buyer: Party
+        purchaseAmount: Decimal
+        purchasePrice: Decimal
+      controller buyer
+      do
+        assertMsg "Insufficient carbon credits available for purchase" (amount >= purchaseAmount)
+        create CarbonCreditTransaction with seller = owner, buyer, amount = purchaseAmount, price = purchasePrice, carbonCreditId
+
+    choice SellCarbonCredit : ContractId CarbonCreditTransaction
+      with
+        seller: Party
+        saleAmount: Decimal
+        salePrice: Decimal
+      controller seller
+      do
+        assertMsg "Insufficient carbon credits available for sale" (amount >= saleAmount)
+        create CarbonCreditTransaction with seller, buyer = owner, amount = saleAmount, price = salePrice, carbonCreditId
+
+template CarbonCreditTransaction
+  with
+    seller: Party
+    buyer: Party
+    amount: Decimal -- Amount in tons of CO2 equivalent traded
+    price: Decimal -- Price of the transaction
+    carbonCreditId: CarbonCreditId -- Identifier for the carbon credit involved in the transaction
+  where
+    signatory seller, buyer
+    observer [] : [Party]
+
+    choice ExchangeCarbonCredit : (ContractId CarbonCredit, ContractId CarbonCredit)
+      with
+        otherCarbonCreditId: CarbonCreditId
+        otherParty: Party
+      controller buyer
+      do
+        (_, otherCredit) <- fetchByKey @CarbonCredit (otherParty, otherCarbonCreditId)
+        assertMsg "Other party is not the owner of the carbon credit" (otherCredit.owner == otherParty)
+        newCreditSeller <- create this with carbonCreditId = otherCarbonCreditId, seller = buyer, buyer = seller
+        newCreditBuyer <- create this with carbonCreditId = carbonCreditId, seller = otherParty, buyer = buyer
+        return (newCreditSeller, newCreditBuyer)
