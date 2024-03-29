@@ -1,45 +1,96 @@
 module CarbonCredit where
 
+-- Custom record type for Carbon Credit details
+data CarbonCreditDetails = CarbonCreditDetails
+  with
+    issuer: Party
+    owner: Party
+    amount: Int
+  deriving (Show, Eq)
+
+-- Template for Carbon Credit
 template CarbonCredit
   with
-    issuer : Party
-    owner : Party
-    amount : Int
+    issuer: Party
+    owner: Party
+    amount: Int
   where
     signatory issuer, owner
-    key (issuer, owner) : (Party, Party)
+    observer owner
+    key (issuer, owner): (Party, Party)
     maintainer key._1
 
-    choice Transfer : ContractId CarbonCreditTransferProposal
+    -- Transfer proposal choice
+    choice TransferCarbonCredit: ContractId CarbonCreditTransferProposal
       with
-        newOwner : Party
+        newOwner: Party
       controller owner
       do
-        create CarbonCreditTransferProposal with ..
+        create CarbonCreditTransferProposal with carbonCredit = this, newOwner
 
-template CarbonCreditTransferProposal
-  with
-    issuer : Party
-    owner : Party
-    newOwner : Party
-    amount : Int
-  where
-    signatory issuer, owner
-    observer newOwner
-
-    choice AcceptTransfer : ContractId CarbonCredit
-      controller newOwner
+    -- Non-consuming choice to increase carbon credits
+    nonconsuming choice IncreaseCarbonCredit: ()
+      with
+        increaseAmount: Int
+      controller issuer
       do
-        create CarbonCredit with owner = newOwner, issuer = issuer, amount = amount
-
-    nonconsuming choice RejectTransfer : ()
-      controller newOwner
-      do
+        assertMsg "Increase amount must be positive" (increaseAmount > 0)
+        archive self
+        _ <- create this with amount = this.amount + increaseAmount
         return ()
 
-data CarbonCreditInfo = CarbonCreditInfo
+    -- Conditional choice for transfer with a minimum amount check
+    choice ConditionalTransfer: ContractId CarbonCreditTransferProposal
+      with
+        newOwner: Party
+        minimumTransferAmount: Int
+      controller owner
+      do
+        assertMsg "Transfer amount is less than minimum required" (this.amount >= minimumTransferAmount)
+        create CarbonCreditTransferProposal with carbonCredit = this, newOwner
+
+    -- Iterative choice for verification process
+    choice VerifyCarbonCredit: ContractId CarbonCredit
+      with
+        verifier: Party
+      controller verifier
+      do
+        -- Simulate verification steps
+        let verified = foldl (\acc _ -> acc && True) True [1..5]
+        assertMsg "Verification failed" verified
+        create this
+
+    -- Choice to optionally transfer credits based on a condition
+    choice OptionalTransfer: Optional (ContractId CarbonCreditTransferProposal)
+      with
+        newOwner: Party
+        condition: Bool
+      controller owner
+      do
+        if condition
+          then Some <$> create CarbonCreditTransferProposal with carbonCredit = this, newOwner
+          else return None
+
+    -- Example of retrieval before performing an operation
+    choice FetchAndTransfer: ContractId CarbonCreditTransferProposal
+      with
+        newOwner: Party
+      controller owner
+      do
+        (_, existingCredits) <- fetchByKey @CarbonCredit (issuer, owner)
+        create CarbonCreditTransferProposal with carbonCredit = existingCredits, newOwner
+
+-- Template for Carbon Credit Transfer Proposal
+template CarbonCreditTransferProposal
   with
-    issuer : Party
-    owner : Party
-    amount : Int
-  deriving (Show)
+    carbonCredit: CarbonCredit
+    newOwner: Party
+  where
+    signatory carbonCredit.issuer
+    observer carbonCredit.owner, newOwner
+
+    -- Accept transfer choice
+    choice AcceptTransfer: ContractId CarbonCredit
+      controller newOwner
+      do
+        create carbonCredit with owner = newOwner
