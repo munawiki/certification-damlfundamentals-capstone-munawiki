@@ -78,6 +78,6 @@ testFailedVerification = script do
   verifier <- allocateParty "Verifier"
   carbonCreditCid <- submitMulti [issuer, owner] [] do
     createCmd CarbonCredit with issuer; owner; amount = 100
-  _ <- submit verifier do
+  _ <- submitMustFail verifier do
     exerciseCmd carbonCreditCid VerifyCarbonCredit with verifier
   pure ()
