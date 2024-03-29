@@ -1,37 +1,50 @@
 module CarbonCredit where
+
+data CarbonCreditDetails = CarbonCreditDetails with
+  issuer: Party
+  organization: Party
+  regulator: Party
+  amount: Int
+    deriving (Show, Eq)
+
+class CreditOperations a where
+  validateTransfer : a -> Int -> Bool
+
+instance CreditOperations CarbonCreditDetails where
+  validateTransfer details transferAmount = transferAmount <= details.amount
+
 template CarbonCreditIssuance
   with
-    issuer: Party
-    organization: Party
-    regulator: Party
-    amount: Int
+    details: CarbonCreditDetails
   where
-    signatory organization
-    observer regulator
+    signatory details.organization
+    observer details.regulator
 
-    key (issuer, organization): (Party, Party)
+    key (details.issuer, details.organization): (Party, Party)
     maintainer key._1
 
     choice TransferCredits: ContractId CarbonCreditTransfer
       with
         recipient: Party
         transferAmount: Int
-      controller organization
+      controller details.organization
       do
-        assert (transferAmount <= amount)
+        assert (validateTransfer details transferAmount)
         create CarbonCreditTransfer with
-          sender = organization
+          details = CarbonCreditDetails with
+            issuer = details.issuer
+            organization = details.organization
+            regulator = details.regulator
+            amount = transferAmount
           recipient
-          amount = transferAmount
 
 template CarbonCreditTransfer
   with
-    sender: Party
+    details: CarbonCreditDetails
     recipient: Party
-    amount: Int
   where
-    signatory sender
+    signatory details.organization
     observer recipient
 
-    key (sender, recipient): (Party, Party)
+    key (details.organization, recipient): (Party, Party)
     maintainer key._1
