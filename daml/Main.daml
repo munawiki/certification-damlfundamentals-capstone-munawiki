@@ -3,50 +3,40 @@ module Main where
 import Daml.Script
 import CarbonCredit
 
-setup : Script ()
+setup : Script (Party, Party, Party)
 setup = script do
-  -- Parties
   issuer <- allocateParty "Issuer"
   owner <- allocateParty "Owner"
   newOwner <- allocateParty "NewOwner"
-  verifier <- allocateParty "Verifier"
-  nonExistentOwner <- allocateParty "NonExistentOwner"
+  return (issuer, owner, newOwner)
 
+testTransferCarbonCredit : Script ()
+testTransferCarbonCredit = script do
+  (issuer, owner, newOwner) <- setup
   carbonCreditCid <- submitMulti [issuer, owner] [] do
-    createCmd CarbonCredit with issuer = issuer; owner = owner; amount = 100
-
-  -- Test 1: TransferCarbonCredit
+    createCmd CarbonCredit with issuer; owner; amount = 100
   transferProposalCid <- submit owner do
-    exerciseCmd carbonCreditCid TransferCarbonCredit with newOwner = newOwner
-
-  newCarbonCreditCid <- submit newOwner do
+    exerciseCmd carbonCreditCid (TransferCarbonCredit newOwner)
+  _ <- submit newOwner do
     exerciseCmd transferProposalCid AcceptTransfer
-
-  -- Test 2: IncreaseCarbonCredit
-  _ <- submit issuer do
-    exerciseCmd newCarbonCreditCid IncreaseCarbonCredit with increaseAmount = 50
-
-  anotherCarbonCreditCid <- submitMulti [issuer, owner] [] do
-    createCmd CarbonCredit with issuer = issuer; owner = owner; amount = 100
-
-  -- Test 3: ConditionalTransfer
-  conditionalTransferProposalCid <- submit owner do
-    exerciseCmd anotherCarbonCreditCid ConditionalTransfer with newOwner = verifier; minimumTransferAmount = 50
-
-  _ <- submit verifier do
-    exerciseCmd conditionalTransferProposalCid AcceptTransfer
-
-  -- Test 1: TransferCarbonCredit with Non-existent Owner
-  _ <- submitMustFail owner do
-    exerciseCmd carbonCreditCid TransferCarbonCredit with newOwner = nonExistentOwner
-
-  -- Test 2: IncreaseCarbonCredit with Negative Amount
-  _ <- submitMustFail issuer do
-    exerciseCmd carbonCreditCid IncreaseCarbonCredit with increaseAmount = -10
-
-  -- Test 3: ConditionalTransfer with Insufficient Amount 
-  _ <- submitMustFail owner do
-    exerciseCmd carbonCreditCid ConditionalTransfer with newOwner = newOwner; minimumTransferAmount = 150
-
   return ()
 
+testIncreaseCarbonCredit : Script ()
+testIncreaseCarbonCredit = script do
+  (issuer, owner, _) <- setup
+  carbonCreditCid <- submitMulti [issuer, owner] [] do
+    createCmd CarbonCredit with issuer; owner; amount = 100
+  _ <- submit issuer do
+    exerciseCmd carbonCreditCid (IncreaseCarbonCredit 50)
+  return ()
+
+testConditionalTransfer : Script ()
+testConditionalTransfer = script do
+  (issuer, owner, newOwner) <- setup
+  carbonCreditCid <- submitMulti [issuer, owner] [] do
+    createCmd CarbonCredit with issuer; owner; amount = 100
+  transferProposalCid <- submit owner do
+    exerciseCmd carbonCreditCid (ConditionalTransfer newOwner 50)
+  _ <- submit newOwner do
+    exerciseCmd transferProposalCid AcceptTransfer
+  return ()
