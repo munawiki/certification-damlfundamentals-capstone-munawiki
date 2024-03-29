@@ -1,7 +1,5 @@
 module CarbonCredit where
 
-import Daml.Script
-
 -- Custom data type with deriving clauses for built-in typeclasses
 data CarbonCreditInfo = CarbonCreditInfo
   with
