@@ -3,51 +3,53 @@ module Main where
 import Daml.Script
 import CarbonCredit
 
-setup : Script (Party, Party, Party)
-setup = script do
-  issuer <- allocatePartyWithHint "Issuer" (PartyIdHint "IssuerUser")
-  owner <- allocatePartyWithHint "Owner" (PartyIdHint "OwnerUser")
-  newOwner <- allocatePartyWithHint "NewOwner" (PartyIdHint "NewOwnerUser")
-  
-  -- Assuming createUser is a function that creates a user and assigns rights
-  -- This part is conceptual and depends on your specific setup and SDK version
-  issuerUserId <- validateUserId "IssuerUser"
-  ownerUserId <- validateUserId "OwnerUser"
-  newOwnerUserId <- validateUserId "NewOwnerUser"
-  
-  createUser (User issuerUserId (Some issuer)) [CanActAs issuer]
-  createUser (User ownerUserId (Some owner)) [CanActAs owner]
-  createUser (User newOwnerUserId (Some newOwner)) [CanActAs newOwner]
-  
-  return (issuer, owner, newOwner)
-
+-- Test Script 1: Transfer Carbon Credit
 testTransferCarbonCredit : Script ()
 testTransferCarbonCredit = script do
-  (issuer, owner, newOwner) <- setup
+  issuer <- allocateParty "Issuer"
+  owner <- allocateParty "Owner"
+  newOwner <- allocateParty "NewOwner"
+  -- Create initial CarbonCredit with both issuer and owner as signatories
   carbonCreditCid <- submitMulti [issuer, owner] [] do
     createCmd CarbonCredit with issuer; owner; amount = 100
+  -- Transfer Carbon Credit to newOwner
   transferProposalCid <- submit owner do
-    exerciseCmd carbonCreditCid (TransferCarbonCredit newOwner)
+    exerciseCmd carbonCreditCid TransferCarbonCredit with newOwner
+  -- Accept the transfer
   _ <- submit newOwner do
     exerciseCmd transferProposalCid AcceptTransfer
-  return ()
+  pure ()
 
-testIncreaseCarbonCredit : Script ()
-testIncreaseCarbonCredit = script do
-  (issuer, owner, _) <- setup
+-- Test Script 2: Increase and Verify Carbon Credits
+testIncreaseAndVerifyCarbonCredits : Script ()
+testIncreaseAndVerifyCarbonCredits = script do
+  issuer <- allocateParty "Issuer"
+  owner <- allocateParty "Owner"
+  verifier <- allocateParty "Verifier"
+  -- Create initial CarbonCredit with both issuer and owner as signatories
   carbonCreditCid <- submitMulti [issuer, owner] [] do
-    createCmd CarbonCredit with issuer; owner; amount = 100
+    createCmd CarbonCredit with issuer; owner; amount = 50
+  -- Increase Carbon Credit
   _ <- submit issuer do
-    exerciseCmd carbonCreditCid (IncreaseCarbonCredit 50)
-  return ()
+    exerciseCmd carbonCreditCid IncreaseCarbonCredit with increaseAmount = 50
+  -- Verify Carbon Credit
+  _ <- submit verifier do
+    exerciseCmd carbonCreditCid VerifyCarbonCredit with verifier
+  pure ()
 
+-- Test Script 3: Conditional Transfer Based on Amount
 testConditionalTransfer : Script ()
 testConditionalTransfer = script do
-  (issuer, owner, newOwner) <- setup
+  issuer <- allocateParty "Issuer"
+  owner <- allocateParty "Owner"
+  newOwner <- allocateParty "NewOwner"
+  -- Create initial CarbonCredit with both issuer and owner as signatories
   carbonCreditCid <- submitMulti [issuer, owner] [] do
-    createCmd CarbonCredit with issuer; owner; amount = 100
+    createCmd CarbonCredit with issuer; owner; amount = 200
+  -- Attempt to transfer Carbon Credit with a minimum amount condition
   transferProposalCid <- submit owner do
-    exerciseCmd carbonCreditCid (ConditionalTransfer newOwner 50)
+    exerciseCmd carbonCreditCid ConditionalTransfer with newOwner; minimumTransferAmount = 150
+  -- Accept the transfer
   _ <- submit newOwner do
     exerciseCmd transferProposalCid AcceptTransfer
-  return ()
+  pure ()
