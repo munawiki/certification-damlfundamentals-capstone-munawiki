@@ -5,9 +5,20 @@ import CarbonCredit
 
 setup : Script (Party, Party, Party)
 setup = script do
-  issuer <- allocateParty "Issuer"
-  owner <- allocateParty "Owner"
-  newOwner <- allocateParty "NewOwner"
+  issuer <- allocatePartyWithHint "Issuer" (PartyIdHint "IssuerUser")
+  owner <- allocatePartyWithHint "Owner" (PartyIdHint "OwnerUser")
+  newOwner <- allocatePartyWithHint "NewOwner" (PartyIdHint "NewOwnerUser")
+  
+  -- Assuming createUser is a function that creates a user and assigns rights
+  -- This part is conceptual and depends on your specific setup and SDK version
+  issuerUserId <- validateUserId "IssuerUser"
+  ownerUserId <- validateUserId "OwnerUser"
+  newOwnerUserId <- validateUserId "NewOwnerUser"
+  
+  createUser (User issuerUserId (Some issuer)) [CanActAs issuer]
+  createUser (User ownerUserId (Some owner)) [CanActAs owner]
+  createUser (User newOwnerUserId (Some newOwner)) [CanActAs newOwner]
+  
   return (issuer, owner, newOwner)
 
 testTransferCarbonCredit : Script ()
