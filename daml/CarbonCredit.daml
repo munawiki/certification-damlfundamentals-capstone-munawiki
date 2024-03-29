@@ -1,50 +1,51 @@
 module CarbonCredit where
 
-data CarbonCreditDetails = CarbonCreditDetails with
-  issuer: Party
-  organization: Party
-  regulator: Party
-  amount: Int
-    deriving (Show, Eq)
 
-class CreditOperations a where
-  validateTransfer : a -> Int -> Bool
+class Describable a where
+  describe : a -> Text
 
-instance CreditOperations CarbonCreditDetails where
-  validateTransfer details transferAmount = transferAmount <= details.amount
+data CarbonCreditDetails = CarbonCreditDetails
+  with
+    creditAmount: Int
+    date: Date
+  deriving (Show, Eq, Ord)
+
+instance Describable CarbonCreditDetails where
+  describe (CarbonCreditDetails amount date) =
+    "Carbon Credit Amount: " <> show amount <> ", Date: " <> show date
 
 template CarbonCreditIssuance
   with
+    issuer: Party
+    regulator: Party
     details: CarbonCreditDetails
   where
-    signatory details.organization
-    observer details.regulator
-
-    key (details.issuer, details.organization): (Party, Party)
+    signatory issuer
+    observer regulator
+    
+    key (issuer, details.date): (Party, Date)
     maintainer key._1
-
-    choice TransferCredits: ContractId CarbonCreditTransfer
-      with
-        recipient: Party
-        transferAmount: Int
-      controller details.organization
+    
+    -- Example choice to report issuance to the regulator
+    nonconsuming choice ReportIssuance: ()
+      controller issuer
       do
-        assert (validateTransfer details transferAmount)
-        create CarbonCreditTransfer with
-          details = CarbonCreditDetails with
-            issuer = details.issuer
-            organization = details.organization
-            regulator = details.regulator
-            amount = transferAmount
-          recipient
+        return ()
 
 template CarbonCreditTransfer
   with
+    currentHolder: Party
+    newHolder: Party
     details: CarbonCreditDetails
-    recipient: Party
   where
-    signatory details.organization
-    observer recipient
-
-    key (details.organization, recipient): (Party, Party)
+    signatory currentHolder
+    observer newHolder
+    
+    key (currentHolder, details.date): (Party, Date)
     maintainer key._1
+    
+    -- Choice to accept the transfer
+    choice AcceptTransfer: ()
+      controller newHolder
+      do
+        return ()
