@@ -1,1 +1,34 @@
 module CarbonCredit where
+
+
+class Showable a where
+  showable : a -> Text
+
+data CarbonCreditDetails = CarbonCreditDetails
+  with
+    creditId: Text
+    amount: Int
+  deriving (Eq, Show)
+
+instance Showable CarbonCreditDetails where
+  showable (CarbonCreditDetails cid amt) = "Credit ID: " <> cid <> ", Amount: " <> show amt
+
+template CarbonCredit
+  with
+    issuer: Party
+    owner: Party
+    details: CarbonCreditDetails
+  where
+    signatory issuer
+    observer owner
+
+    key (issuer, details.creditId): (Party, Text)
+    maintainer key._1
+
+template CarbonCreditTransaction
+  with
+    fromParty: Party
+    toParty: Party
+    details: CarbonCreditDetails
+  where
+    signatory fromParty, toParty
