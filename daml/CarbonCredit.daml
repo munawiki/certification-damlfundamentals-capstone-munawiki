@@ -1,35 +1,36 @@
 module CarbonCredit where
 
--- A custom record for project information
-data ProjectInfo = ProjectInfo
-  with
-    projectName: Text
-    location: Text
-    projectType: Text
+data CarbonCredit = CarbonCredit with
+    amount: Int
+    regulatoryBody: Party
   deriving (Show, Eq)
+
+class Display a where
+  display : a -> Text
+
+instance Display CarbonCredit where
+  display cc = "Amount: " <> show cc.amount <> ", Regulatory Body: " <> show cc.regulatoryBody
 
 template CarbonCreditIssuance
   with
     issuer: Party
-    beneficiary: Party
-    creditId: Text
-    amount: Int
-    projectInfo: ProjectInfo  -- Adding the custom record to the template
+    company: Party
+    carbonCredit: CarbonCredit
   where
-    signatory issuer
-    observer beneficiary
-    key (issuer, creditId): (Party, Text)
+    signatory company
+    observer issuer
+
+    key (issuer, company): (Party, Party)
     maintainer key._1
 
 template CarbonCreditTransfer
   with
-    currentOwner: Party
-    newOwner: Party
-    creditId: Text
-    amount: Int
-    projectInfo: ProjectInfo  -- Adding the custom record to the template
+    sender: Party
+    receiver: Party
+    carbonCredit: CarbonCredit
   where
-    signatory currentOwner
-    observer newOwner
-    key (currentOwner, creditId): (Party, Text)
+    signatory sender, receiver
+    observer carbonCredit.regulatoryBody
+
+    key (sender, receiver): (Party, Party)
     maintainer key._1
