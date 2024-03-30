@@ -2,13 +2,11 @@ module Main where
 
 import Daml.Script
 import CarbonCredit
+import DA.Foldable (forA_)
 
 -- 1. Issuing Carbon Credits
-testIssueCredits : Script ()
-testIssueCredits = script do
-  issuer <- allocateParty "Issuer"
-  company <- allocateParty "Company"
-  regulatoryBody <- allocateParty "RegulatoryBody"
+testIssueCredits : Party -> Party -> Party -> Script ()
+testIssueCredits issuer company regulatoryBody = script do
   let carbonCredit = CarbonCredit with amount = 1000; regulatoryBody
   issuanceCid <- submitMulti [issuer, company] [] do
     createCmd CarbonCreditIssuance with issuer; company; carbonCredit
@@ -17,15 +15,17 @@ testIssueCredits = script do
   return ()  -- Added to fix the error
 
 -- 2. Batch Transfer of Carbon Credits
-testBatchTransfer : Script ()
-testBatchTransfer = script do
-  issuer <- allocateParty "Issuer"
-  receivers <- mapA allocateParty ["Receiver1", "Receiver2", "Receiver3"]
-  regulatoryBody <- allocateParty "RegulatoryBody"
+testBatchTransfer : Party -> Party -> [Party] -> Party -> Script ()
+testBatchTransfer issuer company receivers regulatoryBody = script do
   
   let carbonCredit = CarbonCredit with amount = 300; regulatoryBody
-  issuanceCid <- submit issuer do
-    createCmd CarbonCreditIssuance with issuer; company = issuer; carbonCredit
+  existingIssuances <- query @CarbonCreditIssuance issuer
+  forA_ existingIssuances $ \issuance -> do
+    submitMulti [issuer, company] [] do
+      exerciseCmd (fst issuance) Archive
+
+  issuanceCid <- submitMulti [issuer, company] [] do
+    createCmd CarbonCreditIssuance with issuer; company; carbonCredit
 
   proposalCids <- submit issuer do
     exerciseCmd issuanceCid BatchTransfer with receivers; amountPerReceiver = 100
@@ -39,11 +39,8 @@ testBatchTransfer = script do
 
  
 -- 3. Validating a Carbon Credit Transfer
-testValidateTransfer : Script ()
-testValidateTransfer = script do
-  sender <- allocateParty "Sender"
-  receiver <- allocateParty "Receiver"
-  regulatoryBody <- allocateParty "RegulatoryBody"
+testValidateTransfer : Party -> Party -> Party -> Script ()
+testValidateTransfer sender receiver regulatoryBody = script do
   let carbonCredit = CarbonCredit with amount = 300; regulatoryBody
   transferCid <- submitMulti [sender, receiver] [] do
     createCmd CarbonCreditTransfer with sender; receiver; carbonCredit
@@ -54,24 +51,19 @@ testValidateTransfer = script do
     Right _ -> return ()
 
 -- Test for failing to increase carbon credits with negative increment
-testIncreaseCreditNegativeIncrement : Script ()
-testIncreaseCreditNegativeIncrement = script do
-  issuer <- allocateParty "Issuer"
-  company <- allocateParty "Company"
-  regulatoryBody <- allocateParty "RegulatoryBody"
+testIncreaseCreditNegativeIncrement : Party -> Party -> Party -> Script ()
+testIncreaseCreditNegativeIncrement issuer company regulatoryBody = script do
   let carbonCredit = CarbonCredit with amount = 1000; regulatoryBody
   issuanceCid <- submitMulti [issuer, company] [] do
     createCmd CarbonCreditIssuance with issuer; company; carbonCredit
+  -- This submission should fail due to the negative increment
   submitMustFail issuer do
     exerciseCmd issuanceCid IncreaseCredit with increment = -100
   return ()
 
 -- Test for failing batch transfer due to insufficient carbon credits
-testBatchTransferInsufficientCredits : Script ()
-testBatchTransferInsufficientCredits = script do
-  issuer <- allocateParty "Issuer"
-  receivers <- mapA allocateParty ["Receiver1", "Receiver2", "Receiver3"]
-  regulatoryBody <- allocateParty "RegulatoryBody"
+testBatchTransferInsufficientCredits : Party -> [Party] -> Party -> Script ()
+testBatchTransferInsufficientCredits issuer receivers regulatoryBody = script do
   let carbonCredit = CarbonCredit with amount = 100; regulatoryBody
   issuanceCid <- submit issuer do
     createCmd CarbonCreditIssuance with issuer; company = issuer; carbonCredit
@@ -80,11 +72,8 @@ testBatchTransferInsufficientCredits = script do
   return ()
 
 -- Test for failing carbon credit transfer validation due to zero amount
-testCreateTransferZeroAmount : Script ()
-testCreateTransferZeroAmount = script do
-  sender <- allocateParty "Sender"
-  receiver <- allocateParty "Receiver"
-  regulatoryBody <- allocateParty "RegulatoryBody"
+testCreateTransferZeroAmount : Party -> Party -> Party -> Script ()
+testCreateTransferZeroAmount sender receiver regulatoryBody = script do
   let carbonCredit = CarbonCredit with amount = 0; regulatoryBody
   submitMustFail sender do
     createCmd CarbonCreditTransfer with sender; receiver; carbonCredit
@@ -92,10 +81,19 @@ testCreateTransferZeroAmount = script do
 
 setup : Script ()
 setup = script do
-  testIssueCredits
-  testBatchTransfer
-  testValidateTransfer
-  testIncreaseCreditNegativeIncrement
-  testBatchTransferInsufficientCredits
-  testCreateTransferZeroAmount
+  -- Allocate parties with hints for easier identification in Daml Navigator
+  issuer <- allocatePartyWithHint "Issuer" (PartyIdHint "Issuer")
+  company <- allocatePartyWithHint "Company" (PartyIdHint "Company")
+  regulatoryBody <- allocatePartyWithHint "RegulatoryBody" (PartyIdHint "RegulatoryBody")
+  sender <- allocatePartyWithHint "Sender" (PartyIdHint "Sender")
+  receiver <- allocatePartyWithHint "Receiver" (PartyIdHint "Receiver")
+  receivers <- mapA (\name -> allocatePartyWithHint name (PartyIdHint name)) ["Receiver1", "Receiver2", "Receiver3"]
+
+  -- Pass the allocated parties to the test functions
+  testIssueCredits issuer company regulatoryBody
+  testBatchTransfer issuer company receivers regulatoryBody  -- Fixed: Added `company` argument
+  testValidateTransfer sender receiver regulatoryBody
+  testIncreaseCreditNegativeIncrement issuer company regulatoryBody
+  testBatchTransferInsufficientCredits issuer receivers regulatoryBody
+  testCreateTransferZeroAmount sender receiver regulatoryBody
   return ()
