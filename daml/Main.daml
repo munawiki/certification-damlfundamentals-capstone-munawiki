@@ -23,16 +23,13 @@ testBatchTransfer = script do
   receivers <- mapA allocateParty ["Receiver1", "Receiver2", "Receiver3"]
   regulatoryBody <- allocateParty "RegulatoryBody"
   
-  -- Issue Carbon Credits to Issuer
   let carbonCredit = CarbonCredit with amount = 300; regulatoryBody
   issuanceCid <- submit issuer do
     createCmd CarbonCreditIssuance with issuer; company = issuer; carbonCredit
 
-  -- Perform Batch Transfer through Proposals
   proposalCids <- submit issuer do
     exerciseCmd issuanceCid BatchTransfer with receivers; amountPerReceiver = 100
   
-  -- Receivers Accept the Proposals
   _ <- forA (zip receivers proposalCids) $ \(receiver, proposalCid) -> do
     submit receiver do
       exerciseCmd proposalCid AcceptTransfer
@@ -91,4 +88,14 @@ testCreateTransferZeroAmount = script do
   let carbonCredit = CarbonCredit with amount = 0; regulatoryBody
   submitMustFail sender do
     createCmd CarbonCreditTransfer with sender; receiver; carbonCredit
+  return ()
+
+setup : Script ()
+setup = script do
+  testIssueCredits
+  testBatchTransfer
+  testValidateTransfer
+  testIncreaseCreditNegativeIncrement
+  testBatchTransferInsufficientCredits
+  testCreateTransferZeroAmount
   return ()
