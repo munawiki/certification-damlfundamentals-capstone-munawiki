@@ -4,6 +4,7 @@ import Daml.Script
 import CarbonCredit
 import DA.Foldable (forA_)
 
+
 -- 1. Issuing Carbon Credits
 testIssueCredits : Party -> Party -> Party -> Script ()
 testIssueCredits issuer company regulatoryBody = script do
@@ -88,6 +89,21 @@ setup = script do
   sender <- allocatePartyWithHint "Sender" (PartyIdHint "Sender")
   receiver <- allocatePartyWithHint "Receiver" (PartyIdHint "Receiver")
   receivers <- mapA (\name -> allocatePartyWithHint name (PartyIdHint name)) ["Receiver1", "Receiver2", "Receiver3"]
+
+  issuerId <- validateUserId "Issuer"
+  companyId <- validateUserId "Company"
+  regulatoryBodyId <- validateUserId "RegulatoryBody"
+  senderId <- validateUserId "Sender"
+  receiverId <- validateUserId "Receiver"
+  receiverIds <- mapA validateUserId ["Receiver1", "Receiver2", "Receiver3"]
+
+  createUser (User issuerId (Some issuer)) [CanActAs issuer]
+  createUser (User companyId (Some company)) [CanActAs company]
+  createUser (User regulatoryBodyId (Some regulatoryBody)) [CanActAs regulatoryBody]
+  createUser (User senderId (Some sender)) [CanActAs sender]
+  createUser (User receiverId (Some receiver)) [CanActAs receiver]
+  forA_ (zip receivers receiverIds) $ \(receiver, receiverId) -> do
+    createUser (User receiverId (Some receiver)) [CanActAs receiver]
 
   -- Pass the allocated parties to the test functions
   testIssueCredits issuer company regulatoryBody
