@@ -25,6 +25,33 @@ template CarbonCredit
     key (issuer, details.creditId): (Party, Text)
     maintainer key._1
 
+    choice TransferCredit : ContractId CarbonCredit
+      with
+        newOwner: Party
+      controller issuer
+      do
+        assertMsg "Transfer amount must be positive" (details.amount > 0)
+        create this with owner = newOwner
+
+    nonconsuming choice SplitCredit : Optional (ContractId CarbonCredit, ContractId CarbonCredit)
+      with
+        splitAmount: Int
+      controller owner
+      do
+        if splitAmount <= 0 || splitAmount >= details.amount
+        then return None
+        else do
+          let remaining = details.amount - splitAmount
+          newCredit1 <- create this with details = details with amount = splitAmount
+          newCredit2 <- create this with details = details with amount = remaining
+          return (Some (newCredit1, newCredit2))
+
+    choice ValidateCredit : ()
+      controller issuer
+      do
+        assertMsg "Credit amount must be positive" (details.amount > 0)
+        return ()
+
 template CarbonCreditTransaction
   with
     fromParty: Party
@@ -32,3 +59,16 @@ template CarbonCreditTransaction
     details: CarbonCreditDetails
   where
     signatory fromParty, toParty
+
+    choice ExchangeCredit : Either Text (ContractId CarbonCreditTransaction)
+      with
+        newDetails: CarbonCreditDetails
+      controller fromParty
+      do
+        existingCreditCid <- fetchByKey @CarbonCredit (fromParty, details.creditId)
+        if newDetails.amount <= 0
+        then return (Left "Invalid amount for exchange.")
+        else do
+          archive (fst existingCreditCid)
+          newCid <- create this with details = newDetails
+          return (Right newCid)
