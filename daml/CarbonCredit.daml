@@ -16,25 +16,35 @@ class CustomShow a where
 instance CustomShow CarbonCreditInfo where
   customShow info = info.certification <> ": " <> show (info.amount)
 
--- First template
 template CarbonCredit
   with
     info: CarbonCreditInfo
   where
     signatory info.issuer, info.owner
-    observer info.owner -- Typically, the owner might also be an observer for notification purposes.
+    observer info.owner 
     
-    -- Contract key
     key info.issuer: Party
     maintainer key
 
-    -- Choices
-    nonconsuming choice TransferOwnership: ContractId CarbonCredit
-      with newOwner: Party
+    choice TransferCredit: ContractId CarbonCredit
+      with
+        newOwner: Party
       controller info.owner
-      do create this with info = info with owner = newOwner
+      do
+        assertMsg "Cannot transfer zero or negative amount of carbon credits" (info.amount > 0.0)
+        fetchByKey @CarbonCredit info.issuer 
+        if newOwner /= info.owner
+          then create this with info = info with owner = newOwner
+          else abort "Transfer aborted: new owner is the same as the current owner"
 
--- Second template for managing carbon credit proposals
+    nonconsuming choice SplitCredit: [ContractId CarbonCredit]
+      with
+        amounts: [Decimal]
+      controller info.owner
+      do
+        assertMsg "Total split amounts must equal original amount" (sum amounts == info.amount)
+        forA amounts (\amt -> create this with info = info with amount = amt) 
+
 template CarbonCreditProposal
   with
     credit: CarbonCreditInfo
@@ -43,10 +53,23 @@ template CarbonCreditProposal
     signatory credit.issuer
     observer proposedTo
     
-    -- Contract key
     key credit.issuer: Party
     maintainer key
 
-    choice AcceptProposal: ContractId CarbonCredit
+    choice AcceptProposal: Either Text (ContractId CarbonCredit)
       controller proposedTo
-      do create CarbonCredit with info = credit
+      do
+        if credit.amount <= 0.0
+          then return (Left "Invalid credit amount") 
+          else do
+            newCredit <- create CarbonCredit with info = credit with owner = proposedTo
+            return (Right newCredit)
+
+    nonconsuming choice RejectProposal: Optional (ContractId CarbonCreditProposal)
+      controller proposedTo
+      do
+        if credit.amount > 1000.0
+          then do
+            archive self
+            return None
+          else return (Some self)
