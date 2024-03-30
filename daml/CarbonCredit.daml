@@ -23,6 +23,23 @@ template CarbonCreditIssuance
     key (issuer, company): (Party, Party)
     maintainer key._1
 
+    choice IncreaseCredit: ContractId CarbonCreditIssuance
+      with
+        increment: Int
+      controller issuer
+      do
+        assertMsg "Increment must be positive" (increment > 0)
+        create this with carbonCredit = carbonCredit with amount = carbonCredit.amount + increment
+
+    choice BatchTransfer: [ContractId CarbonCreditTransfer]
+      with
+        receivers: [Party]
+        amountPerReceiver: Int
+      controller issuer
+      do
+        forA receivers $ \receiver -> do
+          create CarbonCreditTransfer with sender = issuer; receiver; carbonCredit = carbonCredit with amount = amountPerReceiver
+
 template CarbonCreditTransfer
   with
     sender: Party
@@ -34,3 +51,26 @@ template CarbonCreditTransfer
 
     key (sender, receiver): (Party, Party)
     maintainer key._1
+
+    ensure carbonCredit.amount > 0
+
+    nonconsuming choice TransferIfEnoughCredits: Optional (ContractId CarbonCreditTransfer)
+      with
+        requiredAmount: Int
+      controller sender
+      do
+        if carbonCredit.amount >= requiredAmount
+          then do
+            let newAmount = carbonCredit.amount - requiredAmount
+            let newCredit = carbonCredit with amount = newAmount
+            newTransfer <- create this with carbonCredit = newCredit
+            return (Some newTransfer)
+          else
+            return None
+
+    choice ValidateTransfer: Either Text (ContractId CarbonCreditTransfer)
+      controller receiver
+      do
+        if carbonCredit.amount <= 0
+          then return (Left "Invalid amount for transfer.")
+          else create this >>= \cid -> return (Right cid)
