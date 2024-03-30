@@ -42,8 +42,10 @@ template CarbonCredit
         then return None
         else do
           let remaining = details.amount - splitAmount
-          newCredit1 <- create this with details = details with amount = splitAmount
-          newCredit2 <- create this with details = details with amount = remaining
+          let newCreditId1 = details.creditId <> "-split1"
+          let newCreditId2 = details.creditId <> "-split2"
+          newCredit1 <- create this with details = details with amount = splitAmount, creditId = newCreditId1
+          newCredit2 <- create this with details = details with amount = remaining, creditId = newCreditId2
           return (Some (newCredit1, newCredit2))
 
     choice ValidateCredit : ()
