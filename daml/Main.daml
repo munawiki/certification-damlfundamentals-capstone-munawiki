@@ -57,7 +57,6 @@ testIncreaseCreditNegativeIncrement issuer company regulatoryBody = script do
   let carbonCredit = CarbonCredit with amount = 1000; regulatoryBody
   issuanceCid <- submitMulti [issuer, company] [] do
     createCmd CarbonCreditIssuance with issuer; company; carbonCredit
-  -- This submission should fail due to the negative increment
   submitMustFail issuer do
     exerciseCmd issuanceCid IncreaseCredit with increment = -100
   return ()
@@ -82,7 +81,6 @@ testCreateTransferZeroAmount sender receiver regulatoryBody = script do
 
 setup : Script ()
 setup = script do
-  -- Allocate parties with hints for easier identification in Daml Navigator
   issuer <- allocatePartyWithHint "Issuer" (PartyIdHint "Issuer")
   company <- allocatePartyWithHint "Company" (PartyIdHint "Company")
   regulatoryBody <- allocatePartyWithHint "RegulatoryBody" (PartyIdHint "RegulatoryBody")
