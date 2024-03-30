@@ -1,76 +1,105 @@
 module CarbonCredit where
 
-
-class Showable a where
-  showable : a -> Text
-
-data CarbonCreditDetails = CarbonCreditDetails
-  with
-    creditId: Text
-    amount: Int
-  deriving (Eq, Show)
-
-instance Showable CarbonCreditDetails where
-  showable (CarbonCreditDetails cid amt) = "Credit ID: " <> cid <> ", Amount: " <> show amt
-
+-- CarbonCredit Template: Represents a carbon credit owned by a party.
 template CarbonCredit
   with
     issuer: Party
     owner: Party
-    details: CarbonCreditDetails
+    amount: Int
   where
-    signatory issuer
-    observer owner
-
-    key (issuer, details.creditId): (Party, Text)
-    maintainer key._1
-
-    choice TransferCredit : ContractId CarbonCredit
+    signatory issuer, owner
+    observer issuer
+    key owner: Party
+    maintainer key
+    choice Transfer: ContractId TransferRequest
       with
         newOwner: Party
-      controller issuer
-      do
-        assertMsg "Transfer amount must be positive" (details.amount > 0)
-        create this with owner = newOwner
-
-    nonconsuming choice SplitCredit : Optional (ContractId CarbonCredit, ContractId CarbonCredit)
-      with
-        splitAmount: Int
+        amountToTransfer: Int
       controller owner
       do
-        if splitAmount <= 0 || splitAmount >= details.amount
-        then return None
-        else do
-          let remaining = details.amount - splitAmount
-          let newCreditId1 = details.creditId <> "-split1"
-          let newCreditId2 = details.creditId <> "-split2"
-          newCredit1 <- create this with details = details with amount = splitAmount, creditId = newCreditId1
-          newCredit2 <- create this with details = details with amount = remaining, creditId = newCreditId2
-          return (Some (newCredit1, newCredit2))
-
-    choice ValidateCredit : ()
-      controller issuer
+        assertMsg "Insufficient credits to transfer" (amount >= amountToTransfer)
+        existingCreditCid <- lookupByKey @CarbonCredit newOwner
+        case existingCreditCid of
+          Some cid -> do
+            existingCredit <- fetch cid
+            archive cid
+            _ <- create CarbonCredit with issuer, owner = newOwner, amount = existingCredit.amount + amountToTransfer
+            archive self
+            _ <- create this with amount = amount - amountToTransfer
+            create TransferRequest with issuer, currentOwner = owner, newOwner, amount = amountToTransfer
+          None -> create TransferRequest with issuer, currentOwner = owner, newOwner, amount = amountToTransfer
+    choice TransferMultiple: [ContractId TransferRequest]
+      with
+        transferDetails: [TransferDetails]
+      controller owner
       do
-        assertMsg "Credit amount must be positive" (details.amount > 0)
+        mapA (\td -> do
+          existingCreditCid <- lookupByKey @CarbonCredit (td.newOwner)
+          case existingCreditCid of
+            Some cid -> do
+              existingCredit <- fetch cid
+              archive cid
+              _ <- create CarbonCredit with issuer, owner = td.newOwner, amount = existingCredit.amount + td.amount
+              archive self
+              _ <- create this with amount = amount - td.amount
+              create TransferRequest with issuer, currentOwner = owner, newOwner = td.newOwner, amount = td.amount
+            None -> create TransferRequest with issuer, currentOwner = owner, newOwner = td.newOwner, amount = td.amount
+          ) transferDetails
+    choice TransferIfNewOwnerHasNoCredits: Optional (ContractId TransferRequest)
+      with
+        newOwner: Party
+        amountToTransfer: Int
+      controller owner
+      do
+        existingCreditCid <- lookupByKey @CarbonCredit newOwner
+        case existingCreditCid of
+          None -> do
+            tr <- create TransferRequest with issuer, currentOwner = owner, newOwner, amount = amountToTransfer
+            return (Some tr)
+          Some _ -> return None
+    choice TransferWithEither: Either Text (ContractId TransferRequest)
+      with
+        newOwner: Party
+        amountToTransfer: Int
+      controller owner
+      do
+        if amount < amountToTransfer then
+          return (Left "Insufficient credits to transfer")
+        else do
+          tr <- create TransferRequest with issuer, currentOwner = owner, newOwner, amount = amountToTransfer
+          return (Right tr)
+
+-- TransferRequest Template: Represents a request to transfer carbon credits from one party to another.
+template TransferRequest
+  with
+    issuer: Party
+    currentOwner: Party
+    newOwner: Party
+    amount: Int
+  where
+    signatory currentOwner, issuer
+    observer newOwner
+    nonconsuming choice AcceptTransfer: ContractId CarbonCredit
+      controller newOwner
+      do
+        existingCreditCid <- lookupByKey @CarbonCredit newOwner
+        case existingCreditCid of
+          Some cid -> do
+            existingCredit <- fetch cid
+            archive cid
+            create CarbonCredit with issuer, owner = newOwner, amount = existingCredit.amount + amount
+          None -> create CarbonCredit with issuer, owner = newOwner, amount
+    nonconsuming choice RejectTransfer: ()
+      controller newOwner
+      do
+        return ()
+    nonconsuming choice CancelTransfer: ()
+      controller currentOwner
+      do
         return ()
 
-template CarbonCreditTransaction
+data TransferDetails = TransferDetails
   with
-    fromParty: Party
-    toParty: Party
-    details: CarbonCreditDetails
-  where
-    signatory fromParty, toParty
-
-    choice ExchangeCredit : Either Text (ContractId CarbonCreditTransaction)
-      with
-        newDetails: CarbonCreditDetails
-      controller fromParty
-      do
-        existingCreditCid <- fetchByKey @CarbonCredit (fromParty, details.creditId)
-        if newDetails.amount <= 0
-        then return (Left "Invalid amount for exchange.")
-        else do
-          archive (fst existingCreditCid)
-          newCid <- create this with details = newDetails
-          return (Right newCid)
+    newOwner: Party
+    amount: Int
+  deriving (Show, Eq)
