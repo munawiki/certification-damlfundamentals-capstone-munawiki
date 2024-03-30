@@ -1,105 +1,31 @@
 module CarbonCredit where
 
--- CarbonCredit Template: Represents a carbon credit owned by a party.
-template CarbonCredit
+data CarbonCredit = CarbonCredit
   with
     issuer: Party
+    amount: Int
+  deriving (Eq, Show)
+
+template CarbonCreditIssuance
+  with
+    issuer: Party
+    regulator: Party
+    credit: CarbonCredit
+  where
+    signatory issuer
+    observer regulator
+    key (issuer, regulator): (Party, Party)
+    maintainer key._1
+  
+
+template CarbonCreditTransfer
+  with
     owner: Party
-    amount: Int
-  where
-    signatory issuer, owner
-    observer issuer
-    key owner: Party
-    maintainer key
-    choice Transfer: ContractId TransferRequest
-      with
-        newOwner: Party
-        amountToTransfer: Int
-      controller owner
-      do
-        assertMsg "Insufficient credits to transfer" (amount >= amountToTransfer)
-        existingCreditCid <- lookupByKey @CarbonCredit newOwner
-        case existingCreditCid of
-          Some cid -> do
-            existingCredit <- fetch cid
-            archive cid
-            _ <- create CarbonCredit with issuer, owner = newOwner, amount = existingCredit.amount + amountToTransfer
-            archive self
-            _ <- create this with amount = amount - amountToTransfer
-            create TransferRequest with issuer, currentOwner = owner, newOwner, amount = amountToTransfer
-          None -> create TransferRequest with issuer, currentOwner = owner, newOwner, amount = amountToTransfer
-    choice TransferMultiple: [ContractId TransferRequest]
-      with
-        transferDetails: [TransferDetails]
-      controller owner
-      do
-        mapA (\td -> do
-          existingCreditCid <- lookupByKey @CarbonCredit (td.newOwner)
-          case existingCreditCid of
-            Some cid -> do
-              existingCredit <- fetch cid
-              archive cid
-              _ <- create CarbonCredit with issuer, owner = td.newOwner, amount = existingCredit.amount + td.amount
-              archive self
-              _ <- create this with amount = amount - td.amount
-              create TransferRequest with issuer, currentOwner = owner, newOwner = td.newOwner, amount = td.amount
-            None -> create TransferRequest with issuer, currentOwner = owner, newOwner = td.newOwner, amount = td.amount
-          ) transferDetails
-    choice TransferIfNewOwnerHasNoCredits: Optional (ContractId TransferRequest)
-      with
-        newOwner: Party
-        amountToTransfer: Int
-      controller owner
-      do
-        existingCreditCid <- lookupByKey @CarbonCredit newOwner
-        case existingCreditCid of
-          None -> do
-            tr <- create TransferRequest with issuer, currentOwner = owner, newOwner, amount = amountToTransfer
-            return (Some tr)
-          Some _ -> return None
-    choice TransferWithEither: Either Text (ContractId TransferRequest)
-      with
-        newOwner: Party
-        amountToTransfer: Int
-      controller owner
-      do
-        if amount < amountToTransfer then
-          return (Left "Insufficient credits to transfer")
-        else do
-          tr <- create TransferRequest with issuer, currentOwner = owner, newOwner, amount = amountToTransfer
-          return (Right tr)
-
--- TransferRequest Template: Represents a request to transfer carbon credits from one party to another.
-template TransferRequest
-  with
-    issuer: Party
-    currentOwner: Party
     newOwner: Party
-    amount: Int
+    credit: CarbonCredit
   where
-    signatory currentOwner, issuer
+    signatory owner, newOwner
     observer newOwner
-    nonconsuming choice AcceptTransfer: ContractId CarbonCredit
-      controller newOwner
-      do
-        existingCreditCid <- lookupByKey @CarbonCredit newOwner
-        case existingCreditCid of
-          Some cid -> do
-            existingCredit <- fetch cid
-            archive cid
-            create CarbonCredit with issuer, owner = newOwner, amount = existingCredit.amount + amount
-          None -> create CarbonCredit with issuer, owner = newOwner, amount
-    nonconsuming choice RejectTransfer: ()
-      controller newOwner
-      do
-        return ()
-    nonconsuming choice CancelTransfer: ()
-      controller currentOwner
-      do
-        return ()
-
-data TransferDetails = TransferDetails
-  with
-    newOwner: Party
-    amount: Int
-  deriving (Show, Eq)
+    key (owner, credit.amount): (Party, Int)
+    maintainer key._1
+   
