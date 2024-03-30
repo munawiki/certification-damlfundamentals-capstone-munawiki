@@ -82,7 +82,6 @@ testCreateTransferZeroAmount sender receiver regulatoryBody = script do
 
 setup : Script ()
 setup = script do
-  -- Allocate parties with hints for easier identification in Daml Navigator
   issuer <- allocatePartyWithHint "Issuer" (PartyIdHint "Issuer")
   company <- allocatePartyWithHint "Company" (PartyIdHint "Company")
   regulatoryBody <- allocatePartyWithHint "RegulatoryBody" (PartyIdHint "RegulatoryBody")
