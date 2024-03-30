@@ -55,3 +55,40 @@ testValidateTransfer = script do
   case result of
     Left errMsg -> error errMsg
     Right _ -> return ()
+
+-- Test for failing to increase carbon credits with negative increment
+testIncreaseCreditNegativeIncrement : Script ()
+testIncreaseCreditNegativeIncrement = script do
+  issuer <- allocateParty "Issuer"
+  company <- allocateParty "Company"
+  regulatoryBody <- allocateParty "RegulatoryBody"
+  let carbonCredit = CarbonCredit with amount = 1000; regulatoryBody
+  issuanceCid <- submitMulti [issuer, company] [] do
+    createCmd CarbonCreditIssuance with issuer; company; carbonCredit
+  submitMustFail issuer do
+    exerciseCmd issuanceCid IncreaseCredit with increment = -100
+  return ()
+
+-- Test for failing batch transfer due to insufficient carbon credits
+testBatchTransferInsufficientCredits : Script ()
+testBatchTransferInsufficientCredits = script do
+  issuer <- allocateParty "Issuer"
+  receivers <- mapA allocateParty ["Receiver1", "Receiver2", "Receiver3"]
+  regulatoryBody <- allocateParty "RegulatoryBody"
+  let carbonCredit = CarbonCredit with amount = 100; regulatoryBody
+  issuanceCid <- submit issuer do
+    createCmd CarbonCreditIssuance with issuer; company = issuer; carbonCredit
+  submitMustFail issuer do
+    exerciseCmd issuanceCid BatchTransfer with receivers; amountPerReceiver = 100
+  return ()
+
+-- Test for failing carbon credit transfer validation due to zero amount
+testCreateTransferZeroAmount : Script ()
+testCreateTransferZeroAmount = script do
+  sender <- allocateParty "Sender"
+  receiver <- allocateParty "Receiver"
+  regulatoryBody <- allocateParty "RegulatoryBody"
+  let carbonCredit = CarbonCredit with amount = 0; regulatoryBody
+  submitMustFail sender do
+    createCmd CarbonCreditTransfer with sender; receiver; carbonCredit
+  return ()

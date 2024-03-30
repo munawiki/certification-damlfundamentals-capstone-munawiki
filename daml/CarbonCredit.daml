@@ -37,6 +37,8 @@ template CarbonCreditIssuance
         amountPerReceiver: Int
       controller issuer
       do
+        let totalRequiredAmount = amountPerReceiver * length receivers
+        assertMsg "Insufficient carbon credits for batch transfer" (carbonCredit.amount >= totalRequiredAmount)
         forA receivers $ \receiver -> do
           create CarbonCreditTransferProposal with issuer; receiver; carbonCredit = carbonCredit with amount = amountPerReceiver
 
