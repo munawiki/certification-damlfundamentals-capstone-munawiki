@@ -1,1 +1,57 @@
 module Main where
+
+import Daml.Script
+import CarbonCredit
+
+-- 1. Issuing Carbon Credits
+testIssueCredits : Script ()
+testIssueCredits = script do
+  issuer <- allocateParty "Issuer"
+  company <- allocateParty "Company"
+  regulatoryBody <- allocateParty "RegulatoryBody"
+  let carbonCredit = CarbonCredit with amount = 1000; regulatoryBody
+  issuanceCid <- submitMulti [issuer, company] [] do
+    createCmd CarbonCreditIssuance with issuer; company; carbonCredit
+  newIssuanceCid <- submit issuer do
+    exerciseCmd issuanceCid IncreaseCredit with increment = 500
+  return ()  -- Added to fix the error
+
+-- 2. Batch Transfer of Carbon Credits
+testBatchTransfer : Script ()
+testBatchTransfer = script do
+  issuer <- allocateParty "Issuer"
+  receivers <- mapA allocateParty ["Receiver1", "Receiver2", "Receiver3"]
+  regulatoryBody <- allocateParty "RegulatoryBody"
+  
+  -- Issue Carbon Credits to Issuer
+  let carbonCredit = CarbonCredit with amount = 300; regulatoryBody
+  issuanceCid <- submit issuer do
+    createCmd CarbonCreditIssuance with issuer; company = issuer; carbonCredit
+
+  -- Perform Batch Transfer through Proposals
+  proposalCids <- submit issuer do
+    exerciseCmd issuanceCid BatchTransfer with receivers; amountPerReceiver = 100
+  
+  -- Receivers Accept the Proposals
+  _ <- forA (zip receivers proposalCids) $ \(receiver, proposalCid) -> do
+    submit receiver do
+      exerciseCmd proposalCid AcceptTransfer
+
+  return ()
+
+
+ 
+-- 3. Validating a Carbon Credit Transfer
+testValidateTransfer : Script ()
+testValidateTransfer = script do
+  sender <- allocateParty "Sender"
+  receiver <- allocateParty "Receiver"
+  regulatoryBody <- allocateParty "RegulatoryBody"
+  let carbonCredit = CarbonCredit with amount = 300; regulatoryBody
+  transferCid <- submitMulti [sender, receiver] [] do
+    createCmd CarbonCreditTransfer with sender; receiver; carbonCredit
+  result <- submit receiver do
+    exerciseCmd transferCid ValidateTransfer
+  case result of
+    Left errMsg -> error errMsg
+    Right _ -> return ()
