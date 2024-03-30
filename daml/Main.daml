@@ -57,7 +57,6 @@ testIncreaseCreditNegativeIncrement issuer company regulatoryBody = script do
   let carbonCredit = CarbonCredit with amount = 1000; regulatoryBody
   issuanceCid <- submitMulti [issuer, company] [] do
     createCmd CarbonCreditIssuance with issuer; company; carbonCredit
-  -- This submission should fail due to the negative increment
   submitMustFail issuer do
     exerciseCmd issuanceCid IncreaseCredit with increment = -100
   return ()
