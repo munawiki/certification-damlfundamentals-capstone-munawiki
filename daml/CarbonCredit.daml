@@ -1,6 +1,5 @@
 module CarbonCredit where
 
--- Custom data type with deriving clauses for built-in typeclasses
 data CarbonCreditInfo = CarbonCreditInfo
   with
     issuer: Party
@@ -9,7 +8,6 @@ data CarbonCreditInfo = CarbonCreditInfo
     certification: Text
   deriving (Eq, Show)
 
--- Custom typeclass for additional functionality
 class CustomShow a where
   customShow : a -> Text
 
