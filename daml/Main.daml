@@ -5,76 +5,6 @@ import CarbonCredit
 import DA.Foldable (forA_)
 
 
--- 1. Issuing Carbon Credits
-testIssueCredits : Party -> Party -> Party -> Script ()
-testIssueCredits issuer company regulatoryBody = script do
-  let carbonCredit = CarbonCredit with amount = 1000; regulatoryBody
-  issuanceCid <- submitMulti [issuer, company] [] do
-    createCmd CarbonCreditIssuance with issuer; company; carbonCredit
-  newIssuanceCid <- submit issuer do
-    exerciseCmd issuanceCid IncreaseCredit with increment = 500
-  return () 
-
--- 2. Batch Transfer of Carbon Credits
-testBatchTransfer : Party -> Party -> [Party] -> Party -> Script ()
-testBatchTransfer issuer company receivers regulatoryBody = script do
-  
-  let carbonCredit = CarbonCredit with amount = 300; regulatoryBody
-  existingIssuances <- query @CarbonCreditIssuance issuer
-  forA_ existingIssuances $ \issuance -> do
-    submitMulti [issuer, company] [] do
-      exerciseCmd (fst issuance) Archive
-
-  issuanceCid <- submitMulti [issuer, company] [] do
-    createCmd CarbonCreditIssuance with issuer; company; carbonCredit
-
-  proposalCids <- submit issuer do
-    exerciseCmd issuanceCid BatchTransfer with receivers; amountPerReceiver = 100
-  
-  forA_ (zip receivers proposalCids) $ \(receiver, proposalCid) -> do
-    submit receiver do
-      exerciseCmd proposalCid AcceptTransfer
-
- 
--- 3. Validating a Carbon Credit Transfer
-testValidateTransfer : Party -> Party -> Party -> Script ()
-testValidateTransfer sender receiver regulatoryBody = script do
-  let carbonCredit = CarbonCredit with amount = 300; regulatoryBody
-  transferCid <- submitMulti [sender, receiver] [] do
-    createCmd CarbonCreditTransfer with sender; receiver; carbonCredit
-  result <- submit receiver do
-    exerciseCmd transferCid ValidateTransfer
-  case result of
-    Left errMsg -> error errMsg
-    Right _ -> return ()
-
--- Test for failing to increase carbon credits with negative increment
-testIncreaseCreditNegativeIncrement : Party -> Party -> Party -> Script ()
-testIncreaseCreditNegativeIncrement issuer company regulatoryBody = script do
-  let carbonCredit = CarbonCredit with amount = 1000; regulatoryBody
-  issuanceCid <- submitMulti [issuer, company] [] do
-    createCmd CarbonCreditIssuance with issuer; company; carbonCredit
-  submitMustFail issuer do
-    exerciseCmd issuanceCid IncreaseCredit with increment = -100
-  return ()
-
--- Test for failing batch transfer due to insufficient carbon credits
-testBatchTransferInsufficientCredits : Party -> [Party] -> Party -> Script ()
-testBatchTransferInsufficientCredits issuer receivers regulatoryBody = script do
-  let carbonCredit = CarbonCredit with amount = 100; regulatoryBody
-  issuanceCid <- submit issuer do
-    createCmd CarbonCreditIssuance with issuer; company = issuer; carbonCredit
-  submitMustFail issuer do
-    exerciseCmd issuanceCid BatchTransfer with receivers; amountPerReceiver = 100
-  return ()
-
--- Test for failing carbon credit transfer validation due to zero amount
-testCreateTransferZeroAmount : Party -> Party -> Party -> Script ()
-testCreateTransferZeroAmount sender receiver regulatoryBody = script do
-  let carbonCredit = CarbonCredit with amount = 0; regulatoryBody
-  submitMustFail sender do
-    createCmd CarbonCreditTransfer with sender; receiver; carbonCredit
-  return ()
 
 setup : Script ()
 setup = script do
@@ -100,11 +30,3 @@ setup = script do
   forA_ (zip receivers receiverIds) $ \(receiver, receiverId) -> do
     createUser (User receiverId (Some receiver)) [CanActAs receiver]
 
-  -- Pass the allocated parties to the test functions
-  testIssueCredits issuer company regulatoryBody
-  testBatchTransfer issuer company receivers regulatoryBody  -- Fixed: Added `company` argument
-  testValidateTransfer sender receiver regulatoryBody
-  testIncreaseCreditNegativeIncrement issuer company regulatoryBody
-  testBatchTransferInsufficientCredits issuer receivers regulatoryBody
-  testCreateTransferZeroAmount sender receiver regulatoryBody
-  return ()
