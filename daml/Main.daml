@@ -31,12 +31,9 @@ testBatchTransfer issuer company receivers regulatoryBody = script do
   proposalCids <- submit issuer do
     exerciseCmd issuanceCid BatchTransfer with receivers; amountPerReceiver = 100
   
-  _ <- forA (zip receivers proposalCids) $ \(receiver, proposalCid) -> do
+  forA_ (zip receivers proposalCids) $ \(receiver, proposalCid) -> do
     submit receiver do
       exerciseCmd proposalCid AcceptTransfer
-
-  return ()
-
 
  
 -- 3. Validating a Carbon Credit Transfer
