@@ -13,7 +13,7 @@ testIssueCredits issuer company regulatoryBody = script do
     createCmd CarbonCreditIssuance with issuer; company; carbonCredit
   newIssuanceCid <- submit issuer do
     exerciseCmd issuanceCid IncreaseCredit with increment = 500
-  return ()  -- Added to fix the error
+  return () 
 
 -- 2. Batch Transfer of Carbon Credits
 testBatchTransfer : Party -> Party -> [Party] -> Party -> Script ()
