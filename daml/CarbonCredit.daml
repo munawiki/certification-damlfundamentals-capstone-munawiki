@@ -72,19 +72,17 @@ template CarbonCreditTransfer
     creditIssuanceIssuer: Party
     creditIssuanceIssueDate: Date
   where
-    signatory sender
-    observer receiver
+    signatory sender, receiver  
+    observer creditIssuanceIssuer 
 
     choice AcceptOrRejectTransfer: Optional (ContractId CarbonCreditIssuance)
       with
         accept: Bool
-      controller receiver
+      controller receiver  
       do
         if accept then do
-          let key = (creditIssuanceIssuer, CarbonCreditInfo with issuer = creditIssuanceIssuer; amount = 0; issueDate = creditIssuanceIssueDate; validUntil = creditIssuanceIssueDate)
-          (_, issuerContract) <- fetchByKey @CarbonCreditIssuance key
-          let newCreditInfo = issuerContract.creditInfo
-          newContractId <- create CarbonCreditIssuance with issuer = creditIssuanceIssuer, owner = receiver, creditInfo = newCreditInfo
-          return (Some newContractId)
+          let key = (creditIssuanceIssuer, CarbonCreditInfo with issuer = creditIssuanceIssuer; amount = 1000; issueDate = creditIssuanceIssueDate; validUntil = addDays creditIssuanceIssueDate 365)
+          (contract, _) <- fetchByKey @CarbonCreditIssuance key
+          return (Some contract)
         else
           return None

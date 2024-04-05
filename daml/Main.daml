@@ -1,1 +1,77 @@
 module Main where
+
+import Daml.Script
+import CarbonCredit
+import DA.Date
+
+
+testIssueAndUpdateCredits = script do
+  -- Setup parties
+  issuer <- allocateParty "Issuer"
+  owner <- allocateParty "Owner"
+  
+  -- Issue Carbon Credits
+  let issueDate = date 2023 Jan 1
+  let validUntil = date 2024 Jan 1
+  let initialAmount = 1000
+  let carbonCreditInfo = CarbonCreditInfo with issuer; amount = initialAmount; issueDate; validUntil
+  issuance <- submitMulti [issuer, owner] [] do
+    createCmd CarbonCreditIssuance with issuer; owner; creditInfo = carbonCreditInfo
+  
+  -- Update Carbon Credit Info
+  let newAmount = Some 1500
+  let newValidUntil = Some (date 2025 Jan 1)
+  updatedIssuance <- submit owner do
+    exerciseCmd issuance UpdateCreditInfo with newAmount; newValidUntil
+  
+  -- Check Transfer Eligibility
+  eligible <- submit owner do
+    exerciseCmd updatedIssuance CheckTransferEligibility with proposedReceiver = owner
+  
+  assert eligible
+
+  return ()
+
+testConditionalTransferAndAcceptance = script do
+  -- Setup parties
+  issuer <- allocateParty "Issuer"
+  owner <- allocateParty "Owner"
+  receiver <- allocateParty "Receiver"
+  
+  -- Issue Carbon Credits
+  let carbonCreditInfo = CarbonCreditInfo with issuer; amount = 1000; issueDate = date 2023 Jan 1; validUntil = date 2024 Jan 1
+  issuance <- submitMulti [issuer, owner] [] do
+    createCmd CarbonCreditIssuance with issuer; owner; creditInfo = carbonCreditInfo
+  
+  -- Conditional Transfer (Now with receiver's authorization included)
+  transfer <- submitMulti [owner, receiver] [] do
+    exerciseCmd issuance ConditionalTransfer with receiver
+  
+  -- Accept Transfer
+  acceptedTransfer <- submit receiver do
+    exerciseCmd transfer AcceptOrRejectTransfer with accept = True
+  
+  return ()
+
+
+testMultipleTransfersAndAcceptance = script do
+  -- Setup parties
+  issuer <- allocateParty "Issuer"
+  owner <- allocateParty "Owner"
+  receiver1 <- allocateParty "Receiver1"
+  receiver2 <- allocateParty "Receiver2"
+  
+  -- Issue Carbon Credits
+  let carbonCreditInfo = CarbonCreditInfo with issuer; amount = 1000; issueDate = date 2023 Jan 1; validUntil = date 2024 Jan 1
+  issuance <- submitMulti [issuer, owner] [] do
+    createCmd CarbonCreditIssuance with issuer; owner; creditInfo = carbonCreditInfo
+  
+  -- Try Multiple Transfers (Needs receivers' authorization)
+  transfers <- submitMulti [owner, receiver1, receiver2] [] do
+    exerciseCmd issuance TryMultipleTransfers with receivers = [receiver1, receiver2]
+  
+  -- Accept Transfers
+  acceptedTransfers <- sequence [submit receiver do
+    exerciseCmd transfer AcceptOrRejectTransfer with accept = True | transfer <- transfers, receiver <- [receiver1, receiver2]]
+  
+  return ()
