@@ -5,13 +5,14 @@ data CarbonCreditDetails = CarbonCreditDetails
     projectId: Text
     verifiedBy: Text
     creditType: Text
-    volume: Int -- 단위: 톤
+    volume: Int 
   deriving (Show, Eq)
 
 template CarbonCreditIssue
   with
     issuer: Party
     beneficiary: Party
+    receiver: Optional Party
     details: CarbonCreditDetails
     issueDate: Date
   where
@@ -20,7 +21,6 @@ template CarbonCreditIssue
     key (issuer, issueDate) : (Party, Date)
     maintainer key._1
     
-    -- 조건부 크레딧 발행 취소 (Conditional & assertMsg)
     nonconsuming choice ConditionalCancelIssue: Optional CarbonCreditIssue
       with
         reason: Text
@@ -34,8 +34,7 @@ template CarbonCreditIssue
           else
             pure (Some this)
 
-    -- 크레딧 거래를 위한 선택지 (Retrieval & Iterative)
-    nonconsuming choice TransferCredits: Either Text (ContractId CarbonCreditTransfer)
+    choice TransferCredits: Either Text (ContractId CarbonCreditTransferRequest)
       with
         receiver: Party
         transferAmount: Int
@@ -48,9 +47,20 @@ template CarbonCreditIssue
           if newVolume < 0 then
             return (Left "Not enough carbon credits to transfer")
           else do
-            let newDetails = details with volume = newVolume
-            contractId <- create CarbonCreditTransfer with sender = issuer; receiver; details = newDetails; transferDate = issueDate
-            return (Right contractId)
+            requestId <- create CarbonCreditTransferRequest with
+              sender = issuer
+              receiver
+              details = details with volume = transferAmount 
+              transferDate = issueDate 
+            return (Right requestId)
+
+    nonconsuming choice AcknowledgeTransfer: ()
+      with
+        receiverParty: Party
+      controller receiverParty
+      do
+        assertMsg "Receiver is already set" (receiver == None)
+        return ()
 
 
 template CarbonCreditTransfer
@@ -64,20 +74,18 @@ template CarbonCreditTransfer
     key (sender, receiver, transferDate) : (Party, Party, Date)
     maintainer key._1
 
-    -- 크레딧을 다시 전송하는 선택지 (consuming & ensure)
     choice ReTransferCredits: Either Text CarbonCreditTransfer
       with
         newReceiver: Party
       controller receiver
       do
-        assertMsg "New receiver must be different from the current receiver" (newReceiver /= receiver) -- 수신자와 새 수신자가 동일하지 않아야 함
+        assertMsg "New receiver must be different from the current receiver" (newReceiver /= receiver) 
         if details.volume > 0
           then do
             create this with receiver = newReceiver
             return (Right this)
           else return (Left "No credits available to transfer")
 
-    -- 크레딧 거래 취소 (Optional & nonconsuming)
     nonconsuming choice CancelTransfer: Optional CarbonCreditTransfer
       controller receiver
       do
@@ -87,3 +95,17 @@ template CarbonCreditTransfer
             return None
           else
             return (Some this)
+
+template CarbonCreditTransferRequest
+  with
+    sender: Party
+    receiver: Party
+    details: CarbonCreditDetails
+    transferDate: Date  
+  where
+    signatory sender, receiver
+
+    choice AcceptTransfer: ContractId CarbonCreditTransfer
+      controller receiver
+      do
+        create CarbonCreditTransfer with sender; receiver; details; transferDate
