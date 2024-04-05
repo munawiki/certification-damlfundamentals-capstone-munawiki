@@ -1,91 +1,89 @@
 module CarbonCredit where
 
-data CarbonCredit = CarbonCredit with
-    amount: Int
-    regulatoryBody: Party
+data CarbonCreditDetails = CarbonCreditDetails
+  with
+    projectId: Text
+    verifiedBy: Text
+    creditType: Text
+    volume: Int -- 단위: 톤
   deriving (Show, Eq)
 
-class Display a where
-  display : a -> Text
-
-instance Display CarbonCredit where
-  display cc = "Amount: " <> show cc.amount <> ", Regulatory Body: " <> show cc.regulatoryBody
-
-template CarbonCreditIssuance
+template CarbonCreditIssue
   with
     issuer: Party
-    company: Party
-    carbonCredit: CarbonCredit
+    beneficiary: Party
+    details: CarbonCreditDetails
+    issueDate: Date
   where
-    signatory issuer, company  -- Updated to include issuer as a signatory
-    observer carbonCredit.regulatoryBody
-
-    key (issuer, company): (Party, Party)
+    signatory issuer
+    observer beneficiary
+    key (issuer, issueDate) : (Party, Date)
     maintainer key._1
-
-    choice IncreaseCredit: ContractId CarbonCreditIssuance
+    
+    -- 조건부 크레딧 발행 취소 (Conditional & assertMsg)
+    nonconsuming choice ConditionalCancelIssue: Optional CarbonCreditIssue
       with
-        increment: Int
+        reason: Text
       controller issuer
       do
-        assertMsg "Increment must be positive" (increment > 0)
-        create this with carbonCredit = carbonCredit with amount = carbonCredit.amount + increment
+        assertMsg "Only projects verified by 'EcoTrust' can be cancelled" (details.verifiedBy == "EcoTrust")
+        if reason == "Project not viable"
+          then do
+            archive self
+            pure None
+          else
+            pure (Some this)
 
-    choice BatchTransfer: [ContractId CarbonCreditTransferProposal]
+    -- 크레딧 거래를 위한 선택지 (Retrieval & Iterative)
+    nonconsuming choice TransferCredits: Either Text (ContractId CarbonCreditTransfer)
       with
-        receivers: [Party]
-        amountPerReceiver: Int
+        receiver: Party
+        transferAmount: Int
       controller issuer
       do
-        let totalRequiredAmount = amountPerReceiver * length receivers
-        assertMsg "Insufficient carbon credits for batch transfer" (carbonCredit.amount >= totalRequiredAmount)
-        forA receivers $ \receiver -> do
-          create CarbonCreditTransferProposal with issuer; receiver; carbonCredit = carbonCredit with amount = amountPerReceiver
+        if transferAmount <= 0 then
+          return (Left "Transfer amount must be positive")
+        else do
+          let newVolume = details.volume - transferAmount
+          if newVolume < 0 then
+            return (Left "Not enough carbon credits to transfer")
+          else do
+            let newDetails = details with volume = newVolume
+            contractId <- create CarbonCreditTransfer with sender = issuer; receiver; details = newDetails; transferDate = issueDate
+            return (Right contractId)
+
 
 template CarbonCreditTransfer
   with
     sender: Party
     receiver: Party
-    carbonCredit: CarbonCredit
+    details: CarbonCreditDetails
+    transferDate: Date
   where
     signatory sender, receiver
-    observer carbonCredit.regulatoryBody
-
-    key (sender, receiver): (Party, Party)
+    key (sender, receiver, transferDate) : (Party, Party, Date)
     maintainer key._1
 
-    ensure carbonCredit.amount > 0
-
-    nonconsuming choice TransferIfEnoughCredits: Optional (ContractId CarbonCreditTransfer)
+    -- 크레딧을 다시 전송하는 선택지 (consuming & ensure)
+    choice ReTransferCredits: Either Text CarbonCreditTransfer
       with
-        requiredAmount: Int
-      controller sender
+        newReceiver: Party
+      controller receiver
       do
-        if carbonCredit.amount >= requiredAmount
+        assertMsg "New receiver must be different from the current receiver" (newReceiver /= receiver) -- 수신자와 새 수신자가 동일하지 않아야 함
+        if details.volume > 0
           then do
-            let newAmount = carbonCredit.amount - requiredAmount
-            let newCredit = carbonCredit with amount = newAmount
-            newTransfer <- create this with carbonCredit = newCredit
-            return (Some newTransfer)
-          else
-            return None
+            create this with receiver = newReceiver
+            return (Right this)
+          else return (Left "No credits available to transfer")
 
-    choice ValidateTransfer: Either Text (ContractId CarbonCreditTransfer)
+    -- 크레딧 거래 취소 (Optional & nonconsuming)
+    nonconsuming choice CancelTransfer: Optional CarbonCreditTransfer
       controller receiver
       do
-        if carbonCredit.amount <= 0
-          then return (Left "Invalid amount for transfer.")
-          else create this >>= \cid -> return (Right cid)
-
-template CarbonCreditTransferProposal
-  with
-    issuer: Party
-    receiver: Party
-    carbonCredit: CarbonCredit
-  where
-    signatory issuer
-    observer receiver
-
-    choice AcceptTransfer: ContractId CarbonCreditTransfer
-      controller receiver
-      do create CarbonCreditTransfer with sender = issuer; receiver; carbonCredit
+        if receiver /= sender
+          then do
+            archive self
+            return None
+          else
+            return (Some this)
