@@ -1,18 +1,14 @@
 module CarbonCredit where
 
-
--- Custom record for carbon credit details
 data CarbonCreditDetails = CarbonCreditDetails
   with
     description: Text
     issuedDate: Date
-  deriving (Show, Eq) -- Deriving built-in typeclasses
+  deriving (Show, Eq) 
 
--- Adjust the Verifiable typeclass to accept the current date
 class Verifiable a where
   verify : Date -> a -> Bool
 
--- Adjust the instance to take the current date as a parameter
 instance Verifiable CarbonCreditDetails where
   verify currentDate details = details.issuedDate <= currentDate
 
@@ -22,12 +18,34 @@ template CarbonCreditIssuance
     company: Party
     regulator: Party
     amount: Int
-    details: CarbonCreditDetails -- Using the custom record
+    details: CarbonCreditDetails 
   where
     signatory issuer, company
     observer regulator
     key (issuer, company): (Party, Party)
     maintainer key._1
+    
+    ensure amount > 0
+    
+    choice ConsumeCredits: ()
+      with
+        amountToConsume: Int
+      controller company
+      do
+        assertMsg "Insufficient carbon credits for consumption" (amount >= amountToConsume)
+        if amountToConsume == amount
+          then archive self
+          else pure ()
+          
+    nonconsuming choice TransferCredits: [ContractId CarbonCreditTransfer]
+      with
+        receiver: Party
+        transferAmount: Int
+        times: Int
+      controller company
+      do
+        forA [1..times] $ \_ -> create CarbonCreditTransfer with sender = company, receiver, regulator, amount = transferAmount, details
+
 
 template CarbonCreditTransfer
   with
@@ -35,9 +53,29 @@ template CarbonCreditTransfer
     receiver: Party
     regulator: Party
     amount: Int
-    details: CarbonCreditDetails -- Using the custom record
+    details: CarbonCreditDetails
   where
     signatory sender, receiver
     observer regulator
     key (sender, receiver): (Party, Party)
     maintainer key._1
+    
+    nonconsuming choice VerifyTransfer: Either Text ()
+      with
+        currentDate: Date
+      controller receiver
+      do
+        if verify currentDate details
+          then pure (Right ())
+          else pure (Left "Carbon credit details verification failed")
+    nonconsuming choice FetchAndCheckCredits: Either Text ()
+      with
+        issuer: Party
+        company: Party
+      controller receiver
+      do
+        issuanceCid <- fetchByKey @CarbonCreditIssuance (issuer, company)
+        let (_, issuance) = issuanceCid
+        if issuance.amount >= amount
+          then pure (Right ())
+          else pure (Left "Insufficient carbon credits for transfer")
