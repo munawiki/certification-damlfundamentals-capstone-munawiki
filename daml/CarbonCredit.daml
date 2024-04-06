@@ -1,40 +1,43 @@
 module CarbonCredit where
 
-data CarbonCreditDetails = CarbonCreditDetails with
-    amount: Decimal
-    date: Date
-  deriving (Show, Eq)
 
-class Validatable a where
-  validate : a -> Bool
+-- Custom record for carbon credit details
+data CarbonCreditDetails = CarbonCreditDetails
+  with
+    description: Text
+    issuedDate: Date
+  deriving (Show, Eq) -- Deriving built-in typeclasses
 
-instance Validatable CarbonCreditDetails where
-  validate details = details.amount > 0.0
+-- Adjust the Verifiable typeclass to accept the current date
+class Verifiable a where
+  verify : Date -> a -> Bool
+
+-- Adjust the instance to take the current date as a parameter
+instance Verifiable CarbonCreditDetails where
+  verify currentDate details = details.issuedDate <= currentDate
 
 template CarbonCreditIssuance
   with
     issuer: Party
-    recipient: Party
-    details: CarbonCreditDetails
+    company: Party
+    regulator: Party
+    amount: Int
+    details: CarbonCreditDetails -- Using the custom record
   where
-    signatory issuer
-    observer recipient
-
-    key (issuer, recipient, details.date): (Party, Party, Date)
+    signatory issuer, company
+    observer regulator
+    key (issuer, company): (Party, Party)
     maintainer key._1
-
-    -- Additional choices and logic can be added here
 
 template CarbonCreditTransfer
   with
-    currentHolder: Party
-    newHolder: Party
-    details: CarbonCreditDetails
+    sender: Party
+    receiver: Party
+    regulator: Party
+    amount: Int
+    details: CarbonCreditDetails -- Using the custom record
   where
-    signatory currentHolder
-    observer newHolder
-
-    key (currentHolder, newHolder, details.date): (Party, Party, Date)
+    signatory sender, receiver
+    observer regulator
+    key (sender, receiver): (Party, Party)
     maintainer key._1
-
-    -- Additional choices and logic can be added here
