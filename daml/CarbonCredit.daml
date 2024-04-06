@@ -46,7 +46,6 @@ template CarbonCreditIssuance
       do
         forA [1..times] $ \_ -> create CarbonCreditTransfer with sender = company, receiver, regulator, amount = transferAmount, details
 
-
 template CarbonCreditTransfer
   with
     sender: Party
@@ -79,3 +78,24 @@ template CarbonCreditTransfer
         if issuance.amount >= amount
           then pure (Right ())
           else pure (Left "Insufficient carbon credits for transfer")
+
+template CarbonCreditTransferProposal
+  with
+    sender: Party
+    receiver: Party
+    regulator: Party
+    amount: Int
+    details: CarbonCreditDetails
+  where
+    signatory sender
+    observer receiver, regulator
+
+    choice AcceptTransfer: ContractId CarbonCreditTransfer
+      controller receiver
+      do
+        create CarbonCreditTransfer with sender, receiver, regulator, amount, details
+
+    choice RejectTransfer: ()
+      controller receiver
+      do
+        pure ()

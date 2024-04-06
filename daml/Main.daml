@@ -1,1 +1,47 @@
 module Main where
+import Daml.Script
+import CarbonCredit
+import DA.Date 
+
+-- Test Script 1: Create Carbon Credit Issuance
+testCreateCarbonCreditIssuance : Script ()
+testCreateCarbonCreditIssuance = script do
+  issuer <- allocateParty "Issuer"
+  company <- allocateParty "Company"
+  regulator <- allocateParty "Regulator"
+  let details = CarbonCreditDetails with description = "Renewable Energy Certificates"; issuedDate = date 2023 Jan 1
+  _ <- submitMulti [issuer, company] [] do
+    createCmd CarbonCreditIssuance with issuer, company, regulator, amount = 1000, details
+  pure ()
+
+-- Test Script 2: Transfer Carbon Credits using Proposal Pattern
+testTransferCarbonCredits : Script ()
+testTransferCarbonCredits = script do
+  issuer <- allocateParty "Issuer"
+  senderCompany <- allocateParty "SenderCompany"
+  receiverCompany <- allocateParty "ReceiverCompany"
+  regulator <- allocateParty "Regulator"
+  let details = CarbonCreditDetails with description = "Renewable Energy Certificates"; issuedDate = date 2023 Jan 1
+  -- Create the issuance contract
+  issuanceCid <- submitMulti [issuer, senderCompany] [] do
+    createCmd CarbonCreditIssuance with issuer, company = senderCompany, regulator, amount = 1000, details
+  -- Create the proposal contract
+  proposalCid <- submit senderCompany do
+    createCmd CarbonCreditTransferProposal with sender = senderCompany, receiver = receiverCompany, regulator, amount = 100, details
+  -- Receiver accepts the proposal, leading to the creation of the transfer contract
+  _ <- submit receiverCompany do
+    exerciseCmd proposalCid AcceptTransfer
+  pure ()
+
+-- Test Script 3: Accept Carbon Credit Transfer Proposal
+testAcceptCarbonCreditTransferProposal : Script ()
+testAcceptCarbonCreditTransferProposal = script do
+  sender <- allocateParty "Sender"
+  receiver <- allocateParty "Receiver"
+  regulator <- allocateParty "Regulator"
+  let details = CarbonCreditDetails with description = "Renewable Energy Certificates"; issuedDate = date 2023 Jan 1
+  proposalCid <- submit sender do
+    createCmd CarbonCreditTransferProposal with sender, receiver, regulator, amount = 100, details
+  _ <- submit receiver do
+    exerciseCmd proposalCid AcceptTransfer
+  pure ()
