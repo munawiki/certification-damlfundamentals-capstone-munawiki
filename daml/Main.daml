@@ -3,12 +3,25 @@ import Daml.Script
 import CarbonCredit
 import DA.Date 
 
-setup : Script (Party, Party, Party, Party)
-setup = script do
-  issuer <- allocateParty "Issuer"
-  company <- allocateParty "Company"
-  receiver <- allocateParty "Receiver"
-  regulator <- allocateParty "Regulator"
+setup : Int -> Script (Party, Party, Party, Party)
+setup uniqueSuffix = script do
+  let suffix = show uniqueSuffix
+  
+  issuer <- allocatePartyWithHint ("Issuer" <> suffix) (PartyIdHint ("Issuer" <> suffix))
+  company <- allocatePartyWithHint ("Company" <> suffix) (PartyIdHint ("Company" <> suffix))
+  receiver <- allocatePartyWithHint ("Receiver" <> suffix) (PartyIdHint ("Receiver" <> suffix))
+  regulator <- allocatePartyWithHint ("Regulator" <> suffix) (PartyIdHint ("Regulator" <> suffix))
+
+  issuerId <- validateUserId ("Issuer" <> suffix)
+  companyId <- validateUserId ("Company" <> suffix)
+  receiverId <- validateUserId ("Receiver" <> suffix)
+  regulatorId <- validateUserId ("Regulator" <> suffix)
+
+  createUser (User issuerId (Some issuer)) [CanActAs issuer]
+  createUser (User companyId (Some company)) [CanActAs company]
+  createUser (User receiverId (Some receiver)) [CanActAs receiver]
+  createUser (User regulatorId (Some regulator)) [CanActAs regulator]
+
   pure (issuer, company, receiver, regulator)
 
 
@@ -30,7 +43,7 @@ runAllTests = script do
 testIssuanceHappyPath : Script ()
 testIssuanceHappyPath = script do
   -- Setup parties
-  (issuer, company, _, regulator) <- setup
+  (issuer, company, _, regulator) <- setup 1
   
   -- Details of the carbon credits to be proposed
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
@@ -52,7 +65,7 @@ testIssuanceHappyPath = script do
 testIssuanceUnhappyPath : Script ()
 testIssuanceUnhappyPath = script do
   -- Setup parties
-  (issuer, company, _, regulator) <- setup
+  (issuer, company, _, regulator) <- setup 2
   
   -- Details of the carbon credits to be proposed
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
@@ -75,7 +88,7 @@ testIssuanceUnhappyPath = script do
 testConsumeCreditsHappyPath : Script ()
 testConsumeCreditsHappyPath = script do
   -- Setup parties
-  (issuer, company, _, regulator) <- setup
+  (issuer, company, _, regulator) <- setup 3
   
   -- Details of the carbon credits
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
@@ -97,7 +110,7 @@ testConsumeCreditsHappyPath = script do
 testConsumeCreditsUnhappyPath : Script ()
 testConsumeCreditsUnhappyPath = script do
   -- Setup parties
-  (issuer, company, _, regulator) <- setup
+  (issuer, company, _, regulator) <- setup 4
   
   -- Details of the carbon credits
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
@@ -120,7 +133,7 @@ testConsumeCreditsUnhappyPath = script do
 testTransferCreditsHappyPath : Script ()
 testTransferCreditsHappyPath = script do
   -- Setup parties
-  (issuer, company, receiver, regulator) <- setup
+  (issuer, company, receiver, regulator) <- setup 5
 
   
   -- Details of the carbon credits
@@ -145,7 +158,7 @@ testTransferCreditsHappyPath = script do
 testTransferCreditsUnhappyPath : Script ()
 testTransferCreditsUnhappyPath = script do
   -- Setup parties
-  (issuer, company, receiver, regulator) <- setup
+  (issuer, company, receiver, regulator) <- setup 6
   
   -- Details of the carbon credits
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
@@ -165,7 +178,7 @@ testTransferCreditsUnhappyPath = script do
 -- 4. Verification of Carbon Credits: The receiving party verifies the details of the transferred carbon credits.testVerifyCreditsHappyPath : Script ()
 testVerifyCreditsHappyPath = script do
   -- Setup parties
-  (issuer, company, receiver, regulator) <- setup
+  (issuer, company, receiver, regulator) <- setup 7
   
   -- Details of the carbon credits
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2022 Jan 1
@@ -189,7 +202,7 @@ testVerifyCreditsHappyPath = script do
 testVerifyCreditsUnhappyPath : Script ()
 testVerifyCreditsUnhappyPath = script do
   -- Setup parties
-  (issuer, company, receiver, regulator) <- setup
+  (issuer, company, receiver, regulator) <- setup 8
   
   -- Details of the carbon credits
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
