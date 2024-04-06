@@ -12,13 +12,25 @@ setup = script do
   pure (issuer, company, receiver, regulator)
 
 
+runAllTests : Script ()
+runAllTests = script do
+  -- Run tests sequentially
+  testIssuanceHappyPath
+  testIssuanceUnhappyPath
+  testConsumeCreditsHappyPath
+  testConsumeCreditsUnhappyPath
+  testTransferCreditsHappyPath
+  testTransferCreditsUnhappyPath
+  testVerifyCreditsHappyPath
+  testVerifyCreditsUnhappyPath
+  -- Add any additional tests here
+  pure ()
+
 -- 1. Issuance of Carbon Credits: An issuer creates carbon credits for a company, specifying the amount and details of the credits.
 testIssuanceHappyPath : Script ()
 testIssuanceHappyPath = script do
   -- Setup parties
-  issuer <- allocateParty "Issuer"
-  company <- allocateParty "Company"
-  regulator <- allocateParty "Regulator"
+  (issuer, company, _, regulator) <- setup
   
   -- Details of the carbon credits to be proposed
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
@@ -40,9 +52,7 @@ testIssuanceHappyPath = script do
 testIssuanceUnhappyPath : Script ()
 testIssuanceUnhappyPath = script do
   -- Setup parties
-  issuer <- allocateParty "Issuer"
-  company <- allocateParty "Company"
-  regulator <- allocateParty "Regulator"
+  (issuer, company, _, regulator) <- setup
   
   -- Details of the carbon credits to be proposed
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
@@ -65,9 +75,7 @@ testIssuanceUnhappyPath = script do
 testConsumeCreditsHappyPath : Script ()
 testConsumeCreditsHappyPath = script do
   -- Setup parties
-  issuer <- allocateParty "Issuer"
-  company <- allocateParty "Company"
-  regulator <- allocateParty "Regulator"
+  (issuer, company, _, regulator) <- setup
   
   -- Details of the carbon credits
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
@@ -89,9 +97,7 @@ testConsumeCreditsHappyPath = script do
 testConsumeCreditsUnhappyPath : Script ()
 testConsumeCreditsUnhappyPath = script do
   -- Setup parties
-  issuer <- allocateParty "Issuer"
-  company <- allocateParty "Company"
-  regulator <- allocateParty "Regulator"
+  (issuer, company, _, regulator) <- setup
   
   -- Details of the carbon credits
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
@@ -114,10 +120,8 @@ testConsumeCreditsUnhappyPath = script do
 testTransferCreditsHappyPath : Script ()
 testTransferCreditsHappyPath = script do
   -- Setup parties
-  issuer <- allocateParty "Issuer"
-  company <- allocateParty "Company"
-  receiver <- allocateParty "Receiver"
-  regulator <- allocateParty "Regulator"
+  (issuer, company, receiver, regulator) <- setup
+
   
   -- Details of the carbon credits
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
@@ -141,10 +145,7 @@ testTransferCreditsHappyPath = script do
 testTransferCreditsUnhappyPath : Script ()
 testTransferCreditsUnhappyPath = script do
   -- Setup parties
-  issuer <- allocateParty "Issuer"
-  company <- allocateParty "Company"
-  receiver <- allocateParty "Receiver"
-  regulator <- allocateParty "Regulator"
+  (issuer, company, receiver, regulator) <- setup
   
   -- Details of the carbon credits
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
@@ -164,10 +165,7 @@ testTransferCreditsUnhappyPath = script do
 -- 4. Verification of Carbon Credits: The receiving party verifies the details of the transferred carbon credits.testVerifyCreditsHappyPath : Script ()
 testVerifyCreditsHappyPath = script do
   -- Setup parties
-  issuer <- allocateParty "Issuer"
-  company <- allocateParty "Company"
-  receiver <- allocateParty "Receiver"
-  regulator <- allocateParty "Regulator"
+  (issuer, company, receiver, regulator) <- setup
   
   -- Details of the carbon credits
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2022 Jan 1
@@ -191,10 +189,7 @@ testVerifyCreditsHappyPath = script do
 testVerifyCreditsUnhappyPath : Script ()
 testVerifyCreditsUnhappyPath = script do
   -- Setup parties
-  issuer <- allocateParty "Issuer"
-  company <- allocateParty "Company"
-  receiver <- allocateParty "Receiver"
-  regulator <- allocateParty "Regulator"
+  (issuer, company, receiver, regulator) <- setup
   
   -- Details of the carbon credits
   let carbonCreditDetails = CarbonCreditDetails with description = "Renewable Energy Credits"; issuedDate = date 2023 Jan 1
