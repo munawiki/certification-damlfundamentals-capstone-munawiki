@@ -27,7 +27,6 @@ setup uniqueSuffix = script do
 
 runAllTests : Script ()
 runAllTests = script do
-  -- Run tests sequentially
   testIssuanceHappyPath
   testIssuanceUnhappyPath
   testConsumeCreditsHappyPath
@@ -36,7 +35,6 @@ runAllTests = script do
   testTransferCreditsUnhappyPath
   testVerifyCreditsHappyPath
   testVerifyCreditsUnhappyPath
-  -- Add any additional tests here
   pure ()
 
 -- 1. Issuance of Carbon Credits: An issuer creates carbon credits for a company, specifying the amount and details of the credits.
