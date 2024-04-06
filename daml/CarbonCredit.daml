@@ -1,88 +1,31 @@
 module CarbonCredit where
 
-import DA.Optional  
-import DA.Date
-
-data CarbonCreditInfo = CarbonCreditInfo with
-    issuer: Party
-    amount: Int
-    issueDate: Date
-    validUntil: Date
-  deriving (Show, Eq)
-
 template CarbonCreditIssuance
   with
     issuer: Party
-    owner: Party
-    creditInfo: CarbonCreditInfo
+    recipient: Party
+    amount: Decimal
+    issuanceDate: Date
   where
-    signatory issuer, owner
-    observer issuer
-    key (issuer, creditInfo): (Party, CarbonCreditInfo)
+    signatory issuer
+    observer recipient
+
+    key (issuer, recipient, issuanceDate): (Party, Party, Date)
     maintainer key._1
 
-    nonconsuming choice UpdateCreditInfo: ContractId CarbonCreditIssuance
-      with
-        newAmount: Optional Int
-        newValidUntil: Optional Date
-      controller owner
-      do
-        assertMsg "New amount must be positive" $ case newAmount of
-                                                    None -> True
-                                                    Some amt -> amt > 0
-        let updatedCreditInfo = creditInfo with
-              amount = fromOptional creditInfo.amount newAmount  
-              validUntil = fromOptional creditInfo.validUntil newValidUntil  
-        create this with creditInfo = updatedCreditInfo
-
-    nonconsuming choice CheckTransferEligibility: Bool
-      with
-        proposedReceiver: Party
-      controller owner
-      do
-        currentDate <- getTime
-        let currentDateAsDate = toDateUTC currentDate
-        return (currentDateAsDate < creditInfo.validUntil)
-
-    choice ConditionalTransfer: ContractId CarbonCreditTransfer
-      with
-        receiver: Party
-      controller owner
-      do
-        currentDate <- getTime
-        let currentDateAsDate = toDateUTC currentDate
-        assertMsg "Credit is no longer valid" (currentDateAsDate < creditInfo.validUntil)
-        create CarbonCreditTransfer with sender = owner, receiver, creditIssuanceIssuer = issuer, creditIssuanceIssueDate = creditInfo.issueDate
-
-    nonconsuming choice TryMultipleTransfers: [ContractId CarbonCreditTransfer]
-      with
-        receivers: [Party]
-      controller owner
-      do
-        currentDate <- getTime
-        let currentDateAsDate = toDateUTC currentDate
-        assertMsg "Credit is no longer valid" (currentDateAsDate < creditInfo.validUntil)
-        forA receivers (\receiver -> do
-          create CarbonCreditTransfer with sender = owner, receiver, creditIssuanceIssuer = issuer, creditIssuanceIssueDate = creditInfo.issueDate)
+    -- Additional choices and logic can be added here
 
 template CarbonCreditTransfer
   with
-    sender: Party
-    receiver: Party
-    creditIssuanceIssuer: Party
-    creditIssuanceIssueDate: Date
+    currentHolder: Party
+    newHolder: Party
+    amount: Decimal
+    transferDate: Date
   where
-    signatory sender, receiver  
-    observer creditIssuanceIssuer 
+    signatory currentHolder
+    observer newHolder
 
-    choice AcceptOrRejectTransfer: Optional (ContractId CarbonCreditIssuance)
-      with
-        accept: Bool
-      controller receiver  
-      do
-        if accept then do
-          let key = (creditIssuanceIssuer, CarbonCreditInfo with issuer = creditIssuanceIssuer; amount = 1000; issueDate = creditIssuanceIssueDate; validUntil = addDays creditIssuanceIssueDate 365)
-          (contract, _) <- fetchByKey @CarbonCreditIssuance key
-          return (Some contract)
-        else
-          return None
+    key (currentHolder, newHolder, transferDate): (Party, Party, Date)
+    maintainer key._1
+
+    -- Additional choices and logic can be added here
