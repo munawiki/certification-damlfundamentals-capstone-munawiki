@@ -1,42 +1,37 @@
-# 🌱 Carbon Credits Management System 🌱
+# 🌍 Carbon Credit Management System 🌍
+
+This system is designed to manage the issuance, transfer, consumption, and verification of carbon credits using Daml.
 
 ### I. Overview
 
-The Carbon Credits Management System is a Daml-based application designed to facilitate the issuance, transfer, and validation of carbon credits. It leverages Daml's powerful contract model to ensure secure and transparent transactions between parties involved in carbon credit trading.
+The Carbon Credit Management System is built to facilitate the tracking and management of carbon credits. It supports various operations such as issuance, consumption, transfer, and verification of carbon credits. The system is built on Daml, showcasing the power of smart contracts in managing complex workflows and ensuring compliance with environmental regulations.
 
 ### II. Workflow
 
-1. **Issuance of Carbon Credits**: An issuer creates a `CarbonCreditIssuance` contract, specifying the amount of carbon credits and the regulatory body overseeing these credits.
-2. **Batch Transfer of Carbon Credits**: The issuer can perform a batch transfer of carbon credits to multiple receivers by creating `CarbonCreditTransferProposal` contracts for each receiver.
-3. **Acceptance of Transfer Proposals**: Receivers can accept transfer proposals, converting them into `CarbonCreditTransfer` contracts.
-4. **Validation of Carbon Credit Transfers**: Receivers can validate the transfer of carbon credits. If the amount is positive, the transfer is validated; otherwise, an error message is returned.
+1. An issuer creates a `CarbonCreditIssuanceProposal` contract for a company.
+2. The company reviews and accepts the proposal, resulting in the creation of a `CarbonCreditIssuance` contract.
+3. The company can then consume credits through the `ConsumeCredits` choice or transfer credits to another party via the `TransferCredits` choice.
+4. The receiving party can verify the details of the transferred credits using the `VerifyTransfer` choice.
 
 ### III. Key Features
 
-- **Non-consuming Choices**: Allows for the transfer of carbon credits if the sender has enough credits without consuming the original contract.
-- **Validation Mechanism**: Ensures that only transfers with a positive amount of carbon credits are valid.
-- **Batch Operations**: Facilitates the transfer of carbon credits to multiple parties efficiently.
+- **Issuance of Carbon Credits**: Issuers can propose the creation of carbon credits for companies, specifying the amount and details.
+- **Consumption of Carbon Credits**: Companies can consume a portion of their carbon credits as part of their carbon offset efforts.
+- **Transfer of Carbon Credits**: Companies can transfer some of their carbon credits to other parties.
+- **Verification of Carbon Credits**: The receiving party can verify the details of the transferred carbon credits.
 
 ### IV. Challenges and Solutions
 
-- **Handling Insufficient Credits**: The system checks for sufficient credits before performing a batch transfer, ensuring that transactions are only processed if there are enough credits available.
-- **Validation of Transfer Amounts**: By implementing a validation step, the system prevents the creation of transfers with non-positive amounts, maintaining the integrity of transactions.
+- **Ensuring Compliance**: The system is designed to ensure that all operations comply with environmental regulations and standards.
+- **Scalability**: Built on Daml, the system is scalable and can handle a large volume of transactions and operations efficiently.
+- **Security and Transparency**: The use of smart contracts ensures that all operations are secure and transparent, providing trust among all parties involved.
 
-### V. Testing
+### V. Compiling & Testing
 
-The system includes a comprehensive suite of tests to ensure the correct functionality of issuing, transferring, and validating carbon credits. These tests cover various scenarios, including insufficient credits for batch transfers and attempts to validate transfers with zero or negative amounts.
+To compile and test the Carbon Credit Management System, you can run the pre-written scripts in `Main.daml` and `CarbonCredit.daml` or use the following command:
 
-### VI. Future Enhancements
-
-- **Integration with External Regulatory Databases**: To further enhance the validation process by cross-referencing with external databases for real-time regulatory compliance.
-- **Automated Carbon Credit Marketplace**: Implementing a marketplace within the system for buying and selling carbon credits, including auction mechanisms and price discovery.
-
-### VII. Getting Started
-
-To compile and test the Carbon Credits Management System, navigate to the project directory and run:
-
-```shell
-daml start
+```
+$ daml start
 ```
 
-This will compile the Daml models and execute the predefined test scenarios to verify the system's functionality.
+This command compiles the Daml models and starts a local sandbox environment for testing.

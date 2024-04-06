@@ -1,91 +1,117 @@
 module CarbonCredit where
 
-data CarbonCredit = CarbonCredit with
-    amount: Int
-    regulatoryBody: Party
-  deriving (Show, Eq)
+data CarbonCreditDetails = CarbonCreditDetails
+  with
+    description: Text
+    issuedDate: Date
+  deriving (Show, Eq) 
 
-class Display a where
-  display : a -> Text
+class Verifiable a where
+  verify : Date -> a -> Bool
 
-instance Display CarbonCredit where
-  display cc = "Amount: " <> show cc.amount <> ", Regulatory Body: " <> show cc.regulatoryBody
+instance Verifiable CarbonCreditDetails where
+  verify currentDate details = details.issuedDate <= currentDate
 
 template CarbonCreditIssuance
   with
     issuer: Party
     company: Party
-    carbonCredit: CarbonCredit
+    regulator: Party
+    amount: Int
+    details: CarbonCreditDetails 
   where
-    signatory issuer, company  -- Updated to include issuer as a signatory
-    observer carbonCredit.regulatoryBody
-
+    signatory issuer, company
+    observer regulator
     key (issuer, company): (Party, Party)
     maintainer key._1
-
-    choice IncreaseCredit: ContractId CarbonCreditIssuance
+    
+    ensure amount > 0
+    
+    choice ConsumeCredits: ()
       with
-        increment: Int
-      controller issuer
+        amountToConsume: Int
+      controller company
       do
-        assertMsg "Increment must be positive" (increment > 0)
-        create this with carbonCredit = carbonCredit with amount = carbonCredit.amount + increment
-
-    choice BatchTransfer: [ContractId CarbonCreditTransferProposal]
+        assertMsg "Insufficient carbon credits for consumption" (amount >= amountToConsume)
+        if amountToConsume == amount
+          then archive self
+          else pure ()
+          
+    nonconsuming choice TransferCredits: [ContractId CarbonCreditTransfer]
       with
-        receivers: [Party]
-        amountPerReceiver: Int
-      controller issuer
+        receiver: Party
+        transferAmount: Int
+        times: Int
+      controller company
       do
-        let totalRequiredAmount = amountPerReceiver * length receivers
-        assertMsg "Insufficient carbon credits for batch transfer" (carbonCredit.amount >= totalRequiredAmount)
-        forA receivers $ \receiver -> do
-          create CarbonCreditTransferProposal with issuer; receiver; carbonCredit = carbonCredit with amount = amountPerReceiver
+        forA [1..times] $ \_ -> create CarbonCreditTransfer with sender = company, receiver, regulator, amount = transferAmount, details
 
 template CarbonCreditTransfer
   with
     sender: Party
     receiver: Party
-    carbonCredit: CarbonCredit
+    regulator: Party
+    amount: Int
+    details: CarbonCreditDetails
   where
     signatory sender, receiver
-    observer carbonCredit.regulatoryBody
-
+    observer regulator
     key (sender, receiver): (Party, Party)
     maintainer key._1
-
-    ensure carbonCredit.amount > 0
-
-    nonconsuming choice TransferIfEnoughCredits: Optional (ContractId CarbonCreditTransfer)
+    
+    nonconsuming choice VerifyTransfer: Either Text ()
       with
-        requiredAmount: Int
-      controller sender
-      do
-        if carbonCredit.amount >= requiredAmount
-          then do
-            let newAmount = carbonCredit.amount - requiredAmount
-            let newCredit = carbonCredit with amount = newAmount
-            newTransfer <- create this with carbonCredit = newCredit
-            return (Some newTransfer)
-          else
-            return None
-
-    choice ValidateTransfer: Either Text (ContractId CarbonCreditTransfer)
+        currentDate: Date
       controller receiver
       do
-        if carbonCredit.amount <= 0
-          then return (Left "Invalid amount for transfer.")
-          else create this >>= \cid -> return (Right cid)
+        assertMsg "Carbon credit details verification failed or invalid date" (verify currentDate details)
+        pure (Right ())
+
+    nonconsuming choice FetchAndCheckCredits: Either Text ()
+      with
+        issuer: Party
+        company: Party
+      controller receiver
+      do
+        issuanceCid <- fetchByKey @CarbonCreditIssuance (issuer, company)
+        let (_, issuance) = issuanceCid
+        if issuance.amount >= amount
+          then pure (Right ())
+          else pure (Left "Insufficient carbon credits for transfer")
+
+
+template CarbonCreditIssuanceProposal
+  with
+    issuer: Party
+    company: Party
+    regulator: Party
+    amount: Int
+    details: CarbonCreditDetails
+  where
+    signatory issuer
+    observer company, regulator
+
+    choice AcceptProposal: ContractId CarbonCreditIssuance
+      controller company
+      do create CarbonCreditIssuance with issuer, company, regulator, amount, details
 
 template CarbonCreditTransferProposal
   with
-    issuer: Party
+    sender: Party
     receiver: Party
-    carbonCredit: CarbonCredit
+    regulator: Party
+    amount: Int
+    details: CarbonCreditDetails
   where
-    signatory issuer
-    observer receiver
+    signatory sender
+    observer receiver, regulator
 
     choice AcceptTransfer: ContractId CarbonCreditTransfer
       controller receiver
-      do create CarbonCreditTransfer with sender = issuer; receiver; carbonCredit
+      do
+        create CarbonCreditTransfer with sender, receiver, regulator, amount, details
+
+    choice RejectTransfer: ()
+      controller receiver
+      do
+        pure ()
