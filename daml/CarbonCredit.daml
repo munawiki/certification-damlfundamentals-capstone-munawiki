@@ -64,9 +64,9 @@ template CarbonCreditTransfer
         currentDate: Date
       controller receiver
       do
-        if verify currentDate details
-          then pure (Right ())
-          else pure (Left "Carbon credit details verification failed")
+        assertMsg "Carbon credit details verification failed or invalid date" (verify currentDate details)
+        pure (Right ())
+
     nonconsuming choice FetchAndCheckCredits: Either Text ()
       with
         issuer: Party
@@ -78,6 +78,22 @@ template CarbonCreditTransfer
         if issuance.amount >= amount
           then pure (Right ())
           else pure (Left "Insufficient carbon credits for transfer")
+
+
+template CarbonCreditIssuanceProposal
+  with
+    issuer: Party
+    company: Party
+    regulator: Party
+    amount: Int
+    details: CarbonCreditDetails
+  where
+    signatory issuer
+    observer company, regulator
+
+    choice AcceptProposal: ContractId CarbonCreditIssuance
+      controller company
+      do create CarbonCreditIssuance with issuer, company, regulator, amount, details
 
 template CarbonCreditTransferProposal
   with
