@@ -1,16 +1,26 @@
 module CarbonCredit where
 
+data CarbonCreditDetails = CarbonCreditDetails with
+    amount: Decimal
+    date: Date
+  deriving (Show, Eq)
+
+class Validatable a where
+  validate : a -> Bool
+
+instance Validatable CarbonCreditDetails where
+  validate details = details.amount > 0.0
+
 template CarbonCreditIssuance
   with
     issuer: Party
     recipient: Party
-    amount: Decimal
-    issuanceDate: Date
+    details: CarbonCreditDetails
   where
     signatory issuer
     observer recipient
 
-    key (issuer, recipient, issuanceDate): (Party, Party, Date)
+    key (issuer, recipient, details.date): (Party, Party, Date)
     maintainer key._1
 
     -- Additional choices and logic can be added here
@@ -19,13 +29,12 @@ template CarbonCreditTransfer
   with
     currentHolder: Party
     newHolder: Party
-    amount: Decimal
-    transferDate: Date
+    details: CarbonCreditDetails
   where
     signatory currentHolder
     observer newHolder
 
-    key (currentHolder, newHolder, transferDate): (Party, Party, Date)
+    key (currentHolder, newHolder, details.date): (Party, Party, Date)
     maintainer key._1
 
     -- Additional choices and logic can be added here
